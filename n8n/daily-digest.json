@@ -1,0 +1,63 @@
+{
+  "name": "okun-workbench-daily-digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * *" }
+          ]
+        }
+      },
+      "id": "cron-7am",
+      "name": "7am Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.OKUN_WORKBENCH_URL}}/api/digest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-digest-secret", "value": "={{$env.OKUN_DIGEST_SECRET}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-digest",
+      "name": "Call /api/digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{$json.sent}}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-failed",
+      "name": "Digest failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "7am Cron": { "main": [[{ "node": "Call /api/digest", "type": "main", "index": 0 }]] },
+    "Call /api/digest": { "main": [[{ "node": "Digest failed?", "type": "main", "index": 0 }]] }
+  },
+  "notes": "Requires env vars OKUN_WORKBENCH_URL (e.g. https://okun-workbench.vercel.app) and OKUN_DIGEST_SECRET (matches DIGEST_SECRET in the app's env) set on the n8n instance. Wire the 'Digest failed?' true branch to a second SMS/alert path per Global Rule 3 (alert via SMS on repeated failure) once a fallback notify channel is chosen — left unwired here since Phase A only defines the single Twilio digest number.",
+  "active": false
+}

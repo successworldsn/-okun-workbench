@@ -1,0 +1,42 @@
+{
+  "name": "okun-workbench-stock-feed-guard",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "hours", "hoursInterval": 4 }
+          ]
+        }
+      },
+      "id": "cron-4h",
+      "name": "Every 4h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.OKUN_WORKBENCH_URL}}/api/ssf/stock-feed-guard",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-digest-secret", "value": "={{$env.OKUN_DIGEST_SECRET}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-guard",
+      "name": "Call /api/ssf/stock-feed-guard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Every 4h": { "main": [[{ "node": "Call /api/ssf/stock-feed-guard", "type": "main", "index": 0 }]] }
+  },
+  "notes": "Module 2d: the one fully autonomous SSF workflow — no cap, no approval gate, because it only ends listings, never spends or publishes. 'Daily minimum, target: every relist cycle' per spec — set to every 4h here as a reasonable relist-cycle cadence; tighten if EJ wants faster coverage. Requires OKUN_WORKBENCH_URL and OKUN_DIGEST_SECRET env vars on the n8n instance (same secret as the digest workflow). Reuses DIGEST_SECRET as the auth header on both endpoints rather than minting a second secret.",
+  "active": false
+}

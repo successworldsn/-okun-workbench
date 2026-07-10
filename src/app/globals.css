@@ -1,0 +1,69 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-data: "JetBrains Mono", monospace;
+}
+
+html,
+body {
+  background: #0a0e1a;
+}
+
+/* Sacred geometry background — pure CSS, GPU-accelerated transform only, no JS render loop. */
+.sacred-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sacred-bg::before,
+.sacred-bg::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140vmax;
+  height: 140vmax;
+  margin: -70vmax 0 0 -70vmax;
+  background-repeat: repeat;
+  background-position: center;
+  opacity: 0.04;
+  animation: sacred-spin 90s linear infinite;
+}
+
+.sacred-bg::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='208' viewBox='0 0 240 208'%3E%3Cpolygon points='60,0 180,0 240,104 180,208 60,208 0,104' fill='none' stroke='%2306B6D4' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+.sacred-bg::after {
+  background-image: radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0) 70%);
+  background-size: 60vmax 60vmax;
+  background-repeat: no-repeat;
+  animation-duration: 60s;
+  animation-direction: reverse;
+  opacity: 0.05;
+}
+
+@keyframes sacred-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sacred-bg::before,
+  .sacred-bg::after {
+    animation: none;
+  }
+}
