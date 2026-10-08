@@ -7,5 +7,6 @@
     "30315",
     "30318"
   ],
-  "note": "Commit a change to this file on a claude/* branch to run the Atlanta feed on GitHub's runners (see .github/workflows/atlanta-feed.yml)."
+  "note": "Commit a change to this file on a claude/* branch to run the Atlanta feed on GitHub's runners (see .github/workflows/atlanta-feed.yml).",
+  "attempt": 2
 }

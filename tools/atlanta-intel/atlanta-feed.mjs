@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 import {
   mapPermitRow, mapCodeRow, mapParcel, parcelKey, attachListRow, buildMarket, toDealIntelCsvRow, unmappedFields, pick, FIELDS,
   mapDeedRow, attachDeeds, map311Row, toPoly, assignFlood, assignOpportunityZones, parseGtfsStations, assignTransit,
-  mapSafmr, attachSafmr, parseAcs, attachAcs,
+  mapSafmr, attachSafmr, parseAcs, attachAcs, centroid, pointInRings,
 } from "../../src/lib/re-feed-map.ts";
 import { analyzeAll, ownershipYears, rehabEstimate } from "../../src/lib/re-intel.ts";
 
@@ -118,7 +118,7 @@ async function polygonsOver(layerUrl, props, outFields) {
   const pts = props.filter((p) => p.lat != null && p.lng != null);
   if (!pts.length) return [];
   const xs = pts.map((p) => p.lng), ys = pts.map((p) => p.lat);
-  const step = 0.05, seen = new Set(), out = [];
+  const step = 0.02, seen = new Set(), out = [];
   for (let x = Math.min(...xs); x <= Math.max(...xs); x += step)
     for (let y = Math.min(...ys); y <= Math.max(...ys); y += step) {
       if (!pts.some((p) => p.lng >= x && p.lng <= x + step && p.lat >= y && p.lat <= y + step)) continue;
@@ -127,7 +127,7 @@ async function polygonsOver(layerUrl, props, outFields) {
         const j = await getJson(`${layerUrl}/query`, {
           where: "1=1", geometry: `${x},${y},${x + step},${y + step}`, geometryType: "esriGeometryEnvelope", inSR: "4326",
           spatialRel: "esriSpatialRelIntersects", outFields, returnGeometry: "true", outSR: "4326",
-          resultOffset: String(offset), resultRecordCount: "500",
+          resultOffset: String(offset), resultRecordCount: "500", geometryPrecision: "6", maxAllowableOffset: "0.00003",
         });
         feats.push(...(j.features ?? []));
         if (!j.exceededTransferLimit && (j.features ?? []).length < 500) break;
@@ -149,7 +149,7 @@ async function getJson(url, params) {
   const body = new URLSearchParams({ f: "json", ...params });
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const res = await fetch(url, { method: "POST", body, headers: { "content-type": "application/x-www-form-urlencoded" } });
+      const res = await fetch(url, { method: "POST", body, headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": "godseye-atlanta-feed/1.0 (public-records research)" }, signal: AbortSignal.timeout(90_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = await res.json();
       if (j.error) throw new Error(`${j.error.code}: ${j.error.message}`);
@@ -162,9 +162,13 @@ async function getJson(url, params) {
 }
 
 /** Every feature matching `where`, paged by the layer's maxRecordCount. */
-async function query(layerUrl, where, { geometry = false, fields = "*" } = {}) {
-  const meta = await getJson(layerUrl, {});
+const metaCache = new Map();
+async function query(layerUrl, where, { geometry = false, fields = "*", extra = {} } = {}) {
+  if (!metaCache.has(layerUrl)) metaCache.set(layerUrl, await getJson(layerUrl, {}));
+  const meta = metaCache.get(layerUrl);
   const page = Math.min(meta.maxRecordCount || 1000, 2000);
+  // Stable order, or offset paging can skip and repeat rows on hosted layers.
+  const oid = meta.objectIdField || (meta.fields ?? []).find((f) => f.type === "esriFieldTypeOID")?.name;
   const out = [];
   for (let offset = 0; ; offset += page) {
     const j = await getJson(`${layerUrl}/query`, {
@@ -174,11 +178,48 @@ async function query(layerUrl, where, { geometry = false, fields = "*" } = {}) {
       outSR: "4326",
       resultOffset: String(offset),
       resultRecordCount: String(page),
+      ...(oid ? { orderByFields: oid } : {}),
+      ...extra,
     });
-    out.push(...(j.features ?? []));
-    if (!j.exceededTransferLimit && (j.features ?? []).length < page) break;
+    const got = j.features ?? [];
+    out.push(...got);
+    if (!got.length || (!j.exceededTransferLimit && got.length < page)) break;
   }
   return { meta, features: out };
+}
+
+const count = (layerUrl, where) => getJson(`${layerUrl}/query`, { where, returnCountOnly: "true" }).then((j) => j.count).catch(() => "?");
+
+/** Census TIGERweb ZIP Code Tabulation Areas: the ZIP boundary the city parcel layer doesn't carry. */
+const TIGER_ZCTA = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer";
+let zctaLayer = null;
+async function zctaLayerUrl() {
+  if (zctaLayer) return zctaLayer;
+  const svc = await getJson(TIGER_ZCTA, {});
+  const l = (svc.layers ?? []).find((x) => /zip code tabulation/i.test(x.name) && /2020/.test(x.name)) ?? (svc.layers ?? []).find((x) => /zip code tabulation/i.test(x.name));
+  if (!l) throw new Error("no ZCTA layer on TIGERweb");
+  zctaLayer = `${TIGER_ZCTA}/${l.id}`;
+  return zctaLayer;
+}
+async function zctaPolys(where) {
+  const url = await zctaLayerUrl();
+  const { features } = await query(url, where, { geometry: true, extra: { geometryPrecision: "6" } });
+  return features
+    .map((f) => ({ zip: String(pick(f.attributes, ["ZCTA5", "ZCTA5CE20", "BASENAME", "GEOID"]) ?? "").slice(0, 5), g: toPoly(f) }))
+    .filter((x) => x.zip && x.g);
+}
+
+/** Every Fulton parcel-number spelling we've seen: compact, "14 0171…", dashed and spaced groups. */
+function idVariants(key) {
+  const k = key.replace(/[^0-9A-Z]/g, "");
+  const v = new Set([k, `${k.slice(0, 2)} ${k.slice(2)}`]);
+  if (/^\d{14}$/.test(k)) {
+    const parts = [k.slice(0, 2), k.slice(2, 6), k.slice(6, 10), k.slice(10, 13), k.slice(13)];
+    v.add(parts.join("-"));
+    v.add(parts.join(" "));
+    v.add(`${parts[0]} ${parts.slice(1).join("")}`);
+  }
+  return [...v];
 }
 
 const sqlDate = (d) => `DATE '${d.toISOString().slice(0, 10)}'`;
@@ -359,6 +400,7 @@ async function main() {
     const { meta } = { meta: await getJson(L.permits.url, {}) };
     const dateField = fieldIn(meta, [...FIELDS.permitDate]);
     const where = dateField ? `${dateField} >= ${sqlDate(since)}` : "1=1";
+    console.log(`  permits: server count for "${where}" = ${await count(L.permits.url, where)}`);
     const { features } = await query(L.permits.url, where);
     let complaints = 0, permits = 0, minD = null, maxD = null;
     for (const f of features) {
@@ -436,14 +478,14 @@ async function main() {
       parcels.set(key, mapParcel(f.attributes, f.geometry, cama.get(key), pulledAt));
     }
   };
-  const sqlList = (keys) => [...new Set(keys.flatMap((k) => [...(rawIds.get(k) ?? [k])]))].map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
+  const sqlList = (keys) => [...new Set(keys.flatMap((k) => [...(rawIds.get(k) ?? []), ...idVariants(k)]))].map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
   let camaAsked = 0, camaFound = 0;
   const camaFor = async (keys) => {
     const m = new Map();
     if (!L.cama.url || !keys.length) return m;
     const camaId = L.cama.idField || idField;
-    for (let i = 0; i < keys.length; i += 150) {
-      const { features } = await query(L.cama.url, `${camaId} IN (${sqlList(keys.slice(i, i + 150))})`);
+    for (let i = 0; i < keys.length; i += 60) {
+      const { features } = await query(L.cama.url, `${camaId} IN (${sqlList(keys.slice(i, i + 60))})`);
       features.forEach((f) => m.set(parcelKey(pick(f.attributes, [...FIELDS.parcelId])), f.attributes));
     }
     camaAsked += keys.length;
@@ -451,19 +493,48 @@ async function main() {
     return m;
   };
   const touchedList = [...touched].slice(0, opt.maxParcels);
-  for (let i = 0; i < touchedList.length; i += 150) {
-    const chunk = touchedList.slice(i, i + 150);
-    const { features } = await query(L.parcels.url, `${idField} IN (${sqlList(chunk)})`, { geometry: true });
+  for (let i = 0; i < touchedList.length; i += 60) {
+    const chunk = touchedList.slice(i, i + 60);
+    const { features } = await query(L.parcels.url, `${idField} IN (${sqlList(chunk.slice(0, 60))})`, { geometry: true });
     features.forEach((f) => seeRaw(pick(f.attributes, [...FIELDS.parcelId])));
     ingest(features, await camaFor(chunk));
   }
+  const unmatched = touchedList.filter((k) => !parcels.has(k));
+  console.log(`  touched parcels: ${touchedList.length}, found in parcel layer: ${touchedList.length - unmatched.length}; unmatched samples: ${unmatched.slice(0, 6).map((k) => JSON.stringify([...(rawIds.get(k) ?? [k])][0])).join(" ")}`);
+  // ZIP sweeps: the city layer's ZIP field is empty, so sweep by the Census ZIP boundary instead.
   for (const zip of opt.zips) {
     const zipField = L.parcels.zipField || "SITEZIP";
-    const { features } = await query(L.parcels.url, `${zipField} LIKE '${zip}%'`, { geometry: true });
+    let { features } = await query(L.parcels.url, `${zipField} LIKE '${zip}%'`, { geometry: true });
+    if (!features.length) {
+      const z = (await zctaPolys(`ZCTA5='${zip}'`).catch(async () => zctaPolys(`BASENAME='${zip}'`)))[0];
+      if (!z) {
+        console.log(`  ZIP ${zip}: no ZCTA boundary found`);
+        continue;
+      }
+      const [x0, y0, x1, y1] = z.g.bbox;
+      const seen = new Set();
+      features = [];
+      for (let x = x0; x < x1; x += 0.012)
+        for (let y = y0; y < y1; y += 0.012) {
+          const { features: fs } = await query(L.parcels.url, "1=1", { geometry: true, extra: { geometry: `${x},${y},${Math.min(x + 0.012, x1)},${Math.min(y + 0.012, y1)}`, geometryType: "esriGeometryEnvelope", inSR: "4326", spatialRel: "esriSpatialRelIntersects" } });
+          for (const f of fs) {
+            const k = parcelKey(pick(f.attributes, [...FIELDS.parcelId]));
+            const c = centroid(f.geometry);
+            if (!k || seen.has(k) || !c || !pointInRings(c.lng, c.lat, z.g.rings)) continue;
+            seen.add(k);
+            f.attributes.__zip = zip;
+            features.push(f);
+          }
+        }
+    }
     const keys = features.map((f) => seeRaw(pick(f.attributes, [...FIELDS.parcelId]))).filter((k) => k && !parcels.has(k));
     console.log(`  ZIP ${zip}: ${features.length} parcels`);
     const cama = await camaFor(keys);
     ingest(features, cama);
+    for (const f of features) {
+      const p = parcels.get(parcelKey(pick(f.attributes, [...FIELDS.parcelId])));
+      if (p && !p.zip && f.attributes.__zip) p.zip = f.attributes.__zip;
+    }
   }
   if (L.cama.url) console.log(`  CAMA matched ${camaFound} of ${camaAsked} parcels`);
   report.push({ id: "coa_parcels", label: L.parcels.label, url: L.parcels.url, pulledAt, records: parcels.size });
@@ -536,6 +607,21 @@ async function main() {
     await enrich("opportunity_zone", L.opportunity_zones.label, L.opportunity_zones?.url, async () => { const g = await polygonsOver(L.opportunity_zones.url, props, "*"); assignOpportunityZones(props, g, pulledAt); return g.length; });
     await enrich("transit", L.marta_gtfs.label, opt.gtfs ?? L.marta_gtfs?.url, async () => { const st = await loadStations(opt.gtfs ?? L.marta_gtfs.url); assignTransit(props, st); return st.length; });
   }
+  // Every parcel gets a ZIP from the Census boundary if its layer didn't carry one (market context is per ZIP).
+  const noZip = props.filter((p) => !p.zip && p.lat != null);
+  if (noZip.length) {
+    try {
+      const url = await zctaLayerUrl();
+      const g = await polygonsOver(url, noZip, "ZCTA5,BASENAME,GEOID");
+      for (const p of noZip) {
+        const hit = g.find((x) => p.lng >= x.bbox[0] && p.lng <= x.bbox[2] && p.lat >= x.bbox[1] && p.lat <= x.bbox[3] && pointInRings(p.lng, p.lat, x.rings));
+        if (hit) p.zip = String(pick(hit.attrs, ["ZCTA5", "BASENAME", "GEOID"])).slice(0, 5);
+      }
+      console.log(`  ZIP assigned from Census boundaries: ${noZip.filter((p) => p.zip).length} of ${noZip.length}`);
+    } catch (e) {
+      console.error(`ZIP assignment skipped: ${e.message}`);
+    }
+  }
   const market = buildMarket(props, now);
 
   // 8. Rents + growth: HUD SAFMR (by bedrooms) and Census ACS (cross-check + 5-year trends)
@@ -545,7 +631,7 @@ async function main() {
     report.push({ id: "hud_safmr", label: "HUD Small Area Fair Market Rents", url: opt.safmr, pulledAt, records: rows.length });
   }
   if (!opt.noCensus) {
-    const zips = [...new Set(props.map((p) => p.zip).filter(Boolean))];
+    const zips = [...new Set(props.map((p) => p.zip).filter((z) => /^\d{5}$/.test(z ?? "")))];
     const acs = async (year) => {
       const key = process.env.CENSUS_API_KEY ? `&key=${process.env.CENSUS_API_KEY}` : "";
       const base = process.env.CENSUS_API_BASE || "https://api.census.gov";
@@ -554,6 +640,7 @@ async function main() {
       return parseAcs(await res.json());
     };
     try {
+      if (!zips.length) throw new Error("no ZIPs on the properties");
       let year = opt.acsYear, latest;
       try { latest = await acs(year); } catch { year -= 1; latest = await acs(year); }
       const earlier = await acs(year - 5).catch(() => new Map());
@@ -578,6 +665,7 @@ async function main() {
 
   console.log(`\nWrote ${opt.out}: ${props.length} properties, ${Object.keys(market).length} ZIP market contexts, ${addrMatched} rows matched by address.`);
   for (const r of report) console.log(`  ${r.id.padEnd(20)} ${String(r.records).padStart(7)} records${r.minDate ? `  ${r.minDate.slice(0, 10)} → ${r.maxDate.slice(0, 10)}` : ""}${r.unmapped?.length ? `  (unmapped: ${r.unmapped.join(", ")})` : ""}`);
+  for (const p of props.slice(0, 3)) console.log(`  sample property: ${JSON.stringify({ id: p.id, address: p.address, zip: p.zip, sqft: p.sqft, yearBuilt: p.yearBuilt, beds: p.beds, zoning: p.zoning, lotSqft: p.lotSqft, homestead: p.homesteadExemption, mailState: p.ownerMailingState, value: p.fairMarketValue, permits: p.permits?.length, cases: p.codeCases?.length })}`);
   console.log("\nTop 15:");
   for (const i of intel.slice(0, 15)) console.log(`  ${String(i.score).padStart(3)}  ${String(i.confidence).padStart(2)}%  ${i.p.address.padEnd(32)} ${i.primarySignal}`);
 }
