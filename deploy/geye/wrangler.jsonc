@@ -1,0 +1,35 @@
+/*
+ * geye.successagenticlabs.com — God's Eye, served the same way as the
+ * successagenticlabs.com apex: an ASSETS-ONLY Worker (no script, no bindings).
+ * Cloudflare serves ./public directly.
+ *
+ *   /        Capital Desk on the live public Georgia infrastructure feed
+ *   /deals   Deal Desk on fictional EXAMPLE properties (real Atlanta records
+ *            hold owner names and never go to a public URL)
+ *
+ * Build the pages first:  node deploy/geye/build-site.mjs
+ * Deploy (laptop):        npx wrangler deploy -c deploy/geye/wrangler.jsonc
+ * Deploy (CI):            .github/workflows/geye-deploy.yml
+ */
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "godseye",
+	"compatibility_date": "2026-07-11",
+
+	"assets": {
+		"directory": "./public",
+		// /deals serves deals.html; /deals.html 307s to /deals.
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "none"
+	},
+
+	"observability": { "enabled": false },
+
+	// Same as the apex: reachable only through the custom domain.
+	"workers_dev": false,
+	"preview_urls": false,
+
+	// A Workers Custom Domain on the successagenticlabs.com zone. Cloudflare
+	// creates the DNS record and certificate on the first deploy.
+	"routes": [{ "pattern": "geye.successagenticlabs.com", "custom_domain": true }]
+}

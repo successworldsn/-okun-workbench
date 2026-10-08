@@ -1,0 +1,53 @@
+# Publishes geye.successagenticlabs.com (assets-only Cloudflare Worker, see
+# deploy/geye/wrangler.jsonc). Runs after each GA infrastructure feed so the
+# live Capital Desk refreshes weekly, on a change to deploy/** or the desks on a
+# claude/* branch, or by hand. Needs repo secrets CLOUDFLARE_API_TOKEN
+# (Workers Scripts:Edit + Workers Custom Domains / zone DNS:Edit on
+# successagenticlabs.com) and CLOUDFLARE_ACCOUNT_ID; without them it builds
+# and stops. Public data only: the real-estate page is the EXAMPLE set.
+name: geye deploy
+
+on:
+  workflow_run:
+    workflows: ["GA infrastructure feed"]
+    types: [completed]
+  push:
+    branches: ["main", "claude/**"]
+    paths: ["deploy/geye/**", "src/components/**", "src/lib/ci-*.ts", "src/lib/re-*.ts", "tools/godseye-preview/**", "data/public/**", "public/ci-sat/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geye-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # After a feed run, deploy what the feed just committed.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build the site
+        run: node deploy/geye/build-site.mjs
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set; built the site but did not deploy."
+            exit 0
+          fi
+          npx --yes wrangler@4 deploy -c deploy/geye/wrangler.jsonc
+          echo "Live: https://geye.successagenticlabs.com"

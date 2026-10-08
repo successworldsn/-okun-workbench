@@ -22,6 +22,8 @@ const APPS = { realestate: { entry: "entry.tsx", out: "godseye-preview.html", ti
 if (!APPS[app]) throw new Error(`--app must be one of ${Object.keys(APPS).join(", ")}`);
 const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(root, "dist", APPS[app].out);
 const dataPath = args.includes("--data") ? args[args.indexOf("--data") + 1] : null;
+/** --site: a standalone page for hosting (doctype, viewport, noindex, cross-desk links), not an artifact preview. */
+const site = args.includes("--site");
 const MAX_LEADS = 1500, MAX_POOL = 4000;
 const cache = join(root, "data", "terrain-cache");
 
@@ -127,7 +129,14 @@ async function main() {
   const css = await readFile(join(tmp, "app.css"), "utf8");
   const mlcss = await readFile(join(root, "node_modules", "maplibre-gl", "dist", "maplibre-gl.css"), "utf8");
   const js = (await readFile(join(tmp, "app.js"), "utf8")).replace(/<\/script/gi, "<\\/script");
-  const html = `<title>${APPS[app].title}</title>
+  const head = site ? `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="God's Eye by Success Agentic Labs">
+` : "";
+  const html = `${head}<title>${APPS[app].title}</title>
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Instrument+Sans:wght@400;500;600&family=Chakra+Petch:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -140,7 +149,7 @@ ${mlcss}
 ${css}
 </style>
 <div id="root"></div>
-<script>globalThis.__GE_TERRAIN__=${JSON.stringify(t)};${data ? `globalThis.__GE_DATA__=${JSON.stringify(data).replace(/</g, "\\u003c")};` : ""}</script>
+<script>${site ? "globalThis.__GE_SITE__=true;" : ""}globalThis.__GE_TERRAIN__=${JSON.stringify(t)};${data ? `globalThis.__GE_DATA__=${JSON.stringify(data).replace(/</g, "\\u003c")};` : ""}</script>
 <script>${js}</script>
 `;
   await mkdir(dirname(out), { recursive: true });
