@@ -200,3 +200,14 @@ test("comps: renovated vs as-is split, distance/size/date filters, non-arm's-len
   const v = estimateValue(subject, undefined, now, c);
   assert.match(v.arvBasis, /median of 3 renovated sales/);
 });
+
+test("Atlanta 2021–2023 code layer: address rebuilt from parts, flag columns become the case type", () => {
+  const r = mapCodeRow({ CAP__: "CE-21-1", NBR: "123", NAME: "MOCK", STR: "ST", DIR: "SW", Open_Date: Date.UTC(2022, 4, 1), Case_Short_Description: "Housing", open_and_vacant: "1", boarded_more_than_6_months: "Y", exterior_structural: "0", overgrowth: "X" });
+  assert.equal(r.address, "123 MOCK ST SW");
+  assert.equal(r.case.id, "CE-21-1");
+  assert.equal(r.case.vacant, true);
+  assert.equal(r.case.boarded, true);
+  assert.equal(r.case.structural, false);
+  assert.match(r.case.type!, /open and vacant, boarded 6\+ months, overgrowth/);
+  assert.equal(r.case.openedAt, "2022-05-01T00:00:00.000Z");
+});

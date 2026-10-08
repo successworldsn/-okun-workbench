@@ -34,7 +34,7 @@ export function date(v: unknown): string | null {
   const d = typeof v === "number" ? new Date(v) : new Date(String(v));
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
-const yes = (v: unknown) => /^(y|yes|true|1|x)$/i.test(String(v ?? "").trim());
+const yes = (v: unknown) => /^(y|yes|true|1|x|checked)$/i.test(String(v ?? "").trim());
 
 /** Parcel ids are written with and without spaces/dashes across layers. */
 export const parcelKey = (v: unknown) => String(v ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
@@ -140,22 +140,48 @@ export function mapPermitRow(row: Row): PermitRowResult {
   return { parcel, address, permit: { id, category: cat, type: [type, subtype].filter(Boolean).join(" · "), status, issuedAt: at, value: num(pick(row, [...FIELDS.permitValue])), description: desc || undefined } };
 }
 
+/** The 2021–2023 Atlanta code layer stores each problem as its own yes/1/X column. */
+const CODE_FLAGS: [string, string][] = [
+  ["open_and_vacant", "open and vacant"],
+  ["boarded_more_than_6_months", "boarded 6+ months"],
+  ["exterior_structural", "exterior structural"],
+  ["Interior_structural", "interior structural"],
+  ["burnt_structure", "burnt structure"],
+  ["junk_trash_debris", "junk / trash / debris"],
+  ["overgrowth", "overgrowth"],
+  ["vacant_lot", "vacant lot"],
+  ["illegal_rooming_house", "illegal rooming house"],
+  ["working_without_permit", "work without permit"],
+  ["no_heat", "no heat"],
+  ["no_power", "no power"],
+  ["No_Water", "no water"],
+  ["raw_sewage", "raw sewage"],
+  ["damaged_accessory_structure", "damaged accessory structure"],
+];
+
 export function mapCodeRow(row: Row): { parcel: string | null; address: string | null; case: CodeCase } {
-  const type = str(pick(row, [...FIELDS.caseType])) ?? "Code case";
+  const flags = CODE_FLAGS.filter(([k]) => yes(pick(row, [k]))).map(([, l]) => l);
+  const desc = str(pick(row, [...FIELDS.caseType, "Case_Short_Description"]));
+  const type = [desc, flags.length ? flags.join(", ") : null].filter(Boolean).join(" · ") || "Code case";
   const status = str(pick(row, [...FIELDS.caseStatus])) ?? undefined;
+  // Point layer without a parcel id: rebuild "123 MAIN ST SW" from its pieces so it joins by address.
+  const built = [pick(row, ["NBR", "STNUM", "HOUSE_NUMBER"]), pick(row, ["NAME", "STNAME", "STREET_NAME"]), pick(row, ["STR", "STTYPE", "STREET_TYPE"]), pick(row, ["DIR", "POSTDIR", "SUFFIX_DIR"])]
+    .map((x) => str(x))
+    .filter(Boolean)
+    .join(" ");
   return {
     parcel: str(pick(row, [...FIELDS.parcelId])),
-    address: str(pick(row, [...FIELDS.address])),
+    address: str(pick(row, [...FIELDS.address])) ?? (built || null),
     case: {
-      id: str(pick(row, [...FIELDS.caseId])) ?? "",
+      id: str(pick(row, [...FIELDS.caseId, "CAP__", "CAP"])) ?? "",
       source: "code_history",
-      openedAt: date(pick(row, [...FIELDS.caseOpened])),
+      openedAt: date(pick(row, [...FIELDS.caseOpened, "Open_Date"])),
       status,
       type,
       open: status ? !CLOSED_STATUS.test(status) : undefined,
-      vacant: yes(pick(row, [...FIELDS.vacant])) || /vacan/i.test(type),
-      boarded: yes(pick(row, [...FIELDS.boarded])),
-      structural: yes(pick(row, [...FIELDS.structural])),
+      vacant: yes(pick(row, [...FIELDS.vacant, "open_and_vacant"])) || /vacan/i.test(desc ?? ""),
+      boarded: yes(pick(row, [...FIELDS.boarded, "boarded_more_than_6_months"])),
+      structural: yes(pick(row, [...FIELDS.structural, "exterior_structural", "Interior_structural", "burnt_structure"])),
     },
   };
 }
