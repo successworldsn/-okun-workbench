@@ -184,21 +184,82 @@ const fieldIn = (meta, candidates) => (meta.fields ?? []).map((f) => f.name).fin
 
 // ─── Discovery ──────────────────────────────────────────────────────────────
 
+/** One line per sublayer of a service: id, name, geometry, record count, and the date range of its first date field. */
+async function describeService(url) {
+  const out = [];
+  try {
+    const svc = await getJson(url, {});
+    const layers = svc.layers ?? (svc.fields ? [{ id: null, name: svc.name }] : []);
+    for (const l of layers.slice(0, 12)) {
+      const lu = l.id == null ? url : `${url.replace(/\/$/, "")}/${l.id}`;
+      try {
+        const meta = await getJson(lu, {});
+        const cnt = await getJson(`${lu}/query`, { where: "1=1", returnCountOnly: "true" }).catch(() => ({}));
+        const df = (meta.fields ?? []).find((f) => f.type === "esriFieldTypeDate");
+        let range = "";
+        if (df) {
+          const st = await getJson(`${lu}/query`, { where: "1=1", outStatistics: JSON.stringify([{ statisticType: "min", onStatisticField: df.name, outStatisticFieldName: "mn" }, { statisticType: "max", onStatisticField: df.name, outStatisticFieldName: "mx" }]) }).catch(() => null);
+          const a = st?.features?.[0]?.attributes;
+          if (a) range = ` · ${df.name} ${new Date(a.mn ?? a.MN).toISOString().slice(0, 10)} → ${new Date(a.mx ?? a.MX).toISOString().slice(0, 10)}`;
+        }
+        out.push(`    ${lu}\n      "${meta.name}" · ${meta.geometryType ?? "table"} · ${cnt.count ?? "?"} records${range}\n      fields: ${(meta.fields ?? []).map((f) => f.name).slice(0, 40).join(", ")}`);
+      } catch (e) {
+        out.push(`    ${lu}  (unreadable: ${e.message})`);
+      }
+    }
+  } catch (e) {
+    out.push(`    ${url}  (unreadable: ${e.message})`);
+  }
+  return out;
+}
+
+/** City of Atlanta's own ArcGIS servers: list services whose names look relevant. */
+async function crawlCity(keywords) {
+  const roots = ["https://gis.atlantaga.gov/dpcd/rest/services", "https://gis.atlantaga.gov/gisweb/rest/services", "https://gis.atlantaga.gov/arcgis/rest/services"];
+  const hits = [];
+  for (const root of roots) {
+    try {
+      const top = await getJson(root, {});
+      const folders = [null, ...(top.folders ?? [])];
+      for (const f of folders) {
+        const j = f ? await getJson(`${root}/${f}`, {}).catch(() => ({})) : top;
+        for (const sv of j.services ?? []) if (keywords.test(sv.name)) hits.push(`${root}/${sv.name}/${sv.type}`);
+      }
+    } catch (e) {
+      console.log(`  ${root}: ${e.message}`);
+    }
+  }
+  return hits;
+}
+
 async function discover(cfg) {
+  const KEY = /parcel|tax|permit|code|enforce|complain|tolemi|zoning|311|opportun|flood|cama|property/i;
+  console.log("== City of Atlanta ArcGIS services matching parcel/permit/code/zoning ==");
+  for (const u of await crawlCity(KEY)) {
+    console.log(`  ${u}`);
+    (await describeService(u)).forEach((l) => console.log(l));
+  }
   const all = [...Object.entries(cfg.layers), ...Object.entries(cfg.counties ?? {}).map(([k, v]) => [`county:${k}`, { ...v, label: `${v.county} County parcels` }])];
   for (const [key, layer] of all) {
-    console.log(`\n${key}  (${layer.label})`);
+    console.log(`\n== ${key}  (${layer.label}) ==`);
     console.log(`  configured: ${layer.url ?? "— not set —"}`);
+    if (layer.url) (await describeService(layer.url.replace(/\/\d+$/, ""))).forEach((l) => console.log(l));
+    const seen = new Set();
     for (const title of layer.search ?? []) {
       try {
-        const j = await getJson("https://www.arcgis.com/sharing/rest/search", { q: `title:"${title}" AND (type:"Feature Service" OR type:"Map Service")`, num: "8" });
-        for (const r of j.results ?? []) console.log(`  candidate: ${r.url}  · "${r.title}" · owner ${r.owner} · modified ${new Date(r.modified).toISOString().slice(0, 10)}`);
+        const j = await getJson("https://www.arcgis.com/sharing/rest/search", { q: `${title} AND (type:"Feature Service" OR type:"Map Service")${key.startsWith("county:") ? "" : " AND (atlanta OR georgia OR fulton)"}`, num: "6" });
+        for (const r of j.results ?? []) {
+          if (!r.url || seen.has(r.url)) continue;
+          seen.add(r.url);
+          console.log(`  candidate: "${r.title}" · owner ${r.owner} · modified ${new Date(r.modified).toISOString().slice(0, 10)}`);
+          (await describeService(r.url)).slice(0, 4).forEach((l) => console.log(l));
+        }
       } catch (e) {
         console.log(`  search "${title}" failed: ${e.message}`);
       }
     }
   }
-  console.log("\nPaste the right layer URL (ending in /FeatureServer/<n> or /MapServer/<n>) into tools/atlanta-intel/sources.json.");
+  console.log("\nPut the right layer URL (…/FeatureServer/<n> or …/MapServer/<n>) into tools/atlanta-intel/sources.json.");
 }
 
 // ─── CSV lists you obtained by request ──────────────────────────────────────

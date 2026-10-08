@@ -8,13 +8,18 @@ import { embedTerrain } from "@/components/realestate/GodsEyeMap";
 import { registerIntel, loadLocal, loadBuyers, loadContracts, loadFieldwork } from "./shims/actions";
 import { applyFieldwork } from "@/lib/re-field";
 
+import type { MarketContext, PropertyRecord } from "@/lib/re-intel";
+import type { FeedSource } from "@/lib/re-desk-store";
+
 declare const __TERRAIN__: Parameters<typeof embedTerrain>[0];
+/** Present when build.mjs ran with --data (a real feed output). */
+const REAL = (globalThis as unknown as { __GE_DATA__?: { generatedAt: string; sources: FeedSource[]; market: Record<string, MarketContext>; properties: PropertyRecord[]; total: number } }).__GE_DATA__;
 
 embedTerrain(__TERRAIN__);
 const now = new Date();
-const market = demoMarket(now);
+const market = REAL ? REAL.market : demoMarket(now);
 const fieldwork = loadFieldwork();
-const intel = analyzeAll(demoProperties(now).map((p) => applyFieldwork(p, fieldwork[p.id])), market, now);
+const intel = analyzeAll((REAL ? REAL.properties : demoProperties(now)).map((p) => applyFieldwork(p, fieldwork[p.id])), market, now);
 registerIntel(intel);
 const local = loadLocal();
 
@@ -26,15 +31,19 @@ createRoot(document.getElementById("root")!).render(
     initialBuyers={loadBuyers()}
     initialContracts={loadContracts()}
     initialFieldwork={fieldwork}
-    meta={{
-      example: true,
-      generatedAt: now.toISOString(),
-      sources: [],
-      note: "Browser preview: fictional EXAMPLE properties, your clicks are saved in this browser only, map shows embedded Atlanta terrain.",
-    }}
+    meta={
+      REAL
+        ? { example: false, generatedAt: REAL.generatedAt, sources: REAL.sources, note: `Browser preview of the ${REAL.generatedAt.slice(0, 10)} Atlanta feed: top ${intel.length.toLocaleString()} leads of ${REAL.total.toLocaleString()} parcels. Public records; your clicks stay in this browser.` }
+        : {
+            example: true,
+            generatedAt: now.toISOString(),
+            sources: [],
+            note: "Browser preview: fictional EXAMPLE properties, your clicks are saved in this browser only, map shows embedded Atlanta terrain.",
+          }
+    }
     market={market}
     nowIso={now.toISOString()}
     claudeConfigured={false}
-    totalProperties={intel.length}
+    totalProperties={REAL ? REAL.total : intel.length}
   />,
 );

@@ -4,7 +4,10 @@
  * real Deal Desk, engines and EXAMPLE data bundled in, Tailwind compiled, and
  * Atlanta terrain tiles embedded (no tile server needed).
  *
- *   node tools/godseye-preview/build.mjs [--out dist/godseye-preview.html]
+ *   node tools/godseye-preview/build.mjs [--out dist/godseye-preview.html] [--data data/atlanta-intel.json]
+ *
+ * With --data the page runs on a real feed output instead of the EXAMPLE set:
+ * the top 1,500 leads by score plus up to 4,000 recent sales as the comp pool.
  */
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
@@ -15,6 +18,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const args = process.argv.slice(2);
 const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(root, "dist", "godseye-preview.html");
+const dataPath = args.includes("--data") ? args[args.indexOf("--data") + 1] : null;
+const MAX_LEADS = 1500, MAX_POOL = 4000;
 const cache = join(root, "data", "terrain-cache");
 
 // Atlanta box, zooms 8–12 (z12 ≈ 38 m per pixel; MapLibre over-zooms past it).
@@ -47,8 +52,23 @@ async function terrain() {
 
 const bin = (n) => join(root, "node_modules", ".bin", n);
 
+/** Real feed output → the slice the page carries (leads + comp pool), analyzed with the same engine. */
+async function realData() {
+  if (!dataPath) return null;
+  const { analyzeAll, isUsableSale } = await import("../../src/lib/re-intel.ts");
+  const j = JSON.parse(await readFile(dataPath, "utf8"));
+  const now = new Date();
+  const ranked = analyzeAll(j.properties, j.market ?? {}, now);
+  const leadIds = new Set(ranked.slice(0, MAX_LEADS).map((i) => i.p.id));
+  const pool = j.properties.filter((p) => !leadIds.has(p.id) && isUsableSale(p, now)).slice(0, MAX_POOL).map((p) => ({ ...p, compOnly: true }));
+  const props = [...j.properties.filter((p) => leadIds.has(p.id)), ...pool];
+  console.log(`data: ${leadIds.size} leads + ${pool.length} comp sales of ${j.properties.length} properties`);
+  return { generatedAt: j.generatedAt, sources: j.sources ?? [], market: j.market ?? {}, properties: props, total: j.properties.length };
+}
+
 async function main() {
   const t = await terrain();
+  const data = await realData();
   console.log(`terrain: ${Object.keys(t.tiles).length} tiles`);
   const tmp = join(root, "data", "preview-build");
   await mkdir(tmp, { recursive: true });
@@ -89,7 +109,7 @@ ${mlcss}
 ${css}
 </style>
 <div id="root"></div>
-<script>globalThis.__GE_TERRAIN__=${JSON.stringify(t)};</script>
+<script>globalThis.__GE_TERRAIN__=${JSON.stringify(t)};${data ? `globalThis.__GE_DATA__=${JSON.stringify(data).replace(/</g, "\\u003c")};` : ""}</script>
 <script>${js}</script>
 `;
   await mkdir(dirname(out), { recursive: true });

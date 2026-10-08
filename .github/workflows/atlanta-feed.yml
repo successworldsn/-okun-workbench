@@ -1,0 +1,62 @@
+# Runs the God's Eye Atlanta public-record feed on GitHub's runners, where the
+# city / county / FEMA / Census / MARTA servers are reachable. Triggered by a
+# change to tools/atlanta-intel/run-request.json on a claude/* branch, or by
+# hand (Actions → Atlanta feed → Run workflow) once this file is on main.
+# Output (feed JSON with owner names from public records, the Deal
+# Intelligence CSV, and the browser preview) is a private run artifact kept 7
+# days — it is never committed.
+name: Atlanta feed
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["tools/atlanta-intel/run-request.json"]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "discover | feed"
+        default: "feed"
+      zips:
+        description: "ZIPs to sweep (space-separated)"
+        default: "30310 30314 30315 30318"
+      since:
+        description: "Days of permits to pull"
+        default: "730"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlanta-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run
+        shell: bash # -eo pipefail, so a failed run fails the step despite tee
+        env:
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_ZIPS: ${{ github.event.inputs.zips }}
+          INPUT_SINCE: ${{ github.event.inputs.since }}
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+        run: node tools/atlanta-intel/ci.mjs 2>&1 | tee run.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: godseye-feed
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            run.log
+            data/atlanta-intel.json
+            data/deal-intel-import.csv
+            dist/godseye-preview.html
