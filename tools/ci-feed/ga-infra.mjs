@@ -13,7 +13,7 @@
  * PLANTS_URL / SUBSTATIONS_URL / LINES_URL. Runs on GitHub's runners
  * (.github/workflows/ga-infra-feed.yml).
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const args = process.argv.slice(2);
@@ -247,6 +247,52 @@ if (!sites.length) {
   if (plantF[0]) console.error("plant fields:", Object.keys(plantF[0].attributes).join(", "));
   process.exit(1);
 }
+// ─── media: satellite photo of the strongest nodes (Esri World Imagery export) ───
+const SAT_DIR = arg("--sat-dir", "public/ci-sat");
+const SAT_N = Number(arg("--sat", "90"));
+const IMG = process.env.IMAGERY_URL || "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export";
+const mwOf = (s) => s.power.onsiteGenerationMw ?? s.power.estimatedMw ?? 0;
+const shoot = [...sites].sort((a, b) => (b.existingUse === "power_plant") - (a.existingUse === "power_plant") || mwOf(b) - mwOf(a) || (b.power.substationKv ?? 0) - (a.power.substationKv ?? 0)).slice(0, SAT_N);
+// Keep plants first but always include the 500 kV backbone.
+for (const s of sites) if (s.power.substationKv >= 500 && !shoot.includes(s) && shoot.length < SAT_N + 30) shoot.push(s);
+await mkdir(SAT_DIR, { recursive: true });
+const keep = new Set();
+let shots = 0;
+await pool(shoot, 4, async (s) => {
+  const dy = 0.0075, dx = (dy / Math.cos((s.lat * Math.PI) / 180)) * 1.6; // ~1.7 × 1 km, 16:10
+  const q = new URLSearchParams({ bbox: [s.lng - dx, s.lat - dy, s.lng + dx, s.lat + dy].join(","), bboxSR: "4326", imageSR: "3857", size: "560,350", format: "jpg", f: "image" });
+  try {
+    const r = await fetch(`${IMG}?${q}`, { headers: { "user-agent": "godseye-ga-infra/1.0" }, signal: AbortSignal.timeout(60_000) });
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok || buf.length < 4000 || buf[0] !== 0xff) throw new Error(`HTTP ${r.status}, ${buf.length} bytes`);
+    const file = `${s.id.replace(/[^A-Za-z0-9_-]/g, "_")}.jpg`;
+    await writeFile(`${SAT_DIR}/${file}`, buf);
+    keep.add(file);
+    s.media = { sat: `/ci-sat/${file}`, credit: "Imagery © Esri, Maxar, Earthstar Geographics" };
+    shots++;
+  } catch (e) {
+    if (!shots) console.log(`imagery: ${e.message}`);
+  }
+});
+for (const f of await readdir(SAT_DIR)) if (!keep.has(f)) await rm(`${SAT_DIR}/${f}`); // drop photos of nodes no longer in the set
+console.log(`imagery: ${shots}/${shoot.length} satellite photos`);
+if (shots) sources.push({ id: "imagery", label: "Esri World Imagery (satellite photos of top nodes)", url: IMG.replace(/\/export$/, ""), records: shots, pulledAt });
+
+// ─── grid: ≥230 kV lines + state outline for the map (public geometry, rounded) ───
+const r3 = (v) => Math.round(v * 1000) / 1000;
+const thin = (path) => path.map(([x, y]) => [r3(x), r3(y)]).filter((p, i, a) => i === 0 || p[0] !== a[i - 1][0] || p[1] !== a[i - 1][1]);
+const grid = { type: "FeatureCollection", features: lineF.flatMap((f) => (f.geometry?.paths ?? []).map((path) => ({ type: "Feature", properties: { kind: "line", kv: Number(pick(f.attributes, ["VOLTAGE"])) || 0 }, geometry: { type: "LineString", coordinates: thin(path) } }))).filter((f) => f.geometry.coordinates.length > 1) };
+try {
+  const TIGER = process.env.STATES_URL || "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0";
+  const j = await getJson(`${TIGER}/query`, { where: `STUSAB='${STATE}'`, outFields: "NAME", returnGeometry: "true", outSR: "4326", maxAllowableOffset: "0.01", geometryPrecision: "3" });
+  for (const f of j.features ?? []) grid.features.push({ type: "Feature", properties: { kind: "outline" }, geometry: { type: "Polygon", coordinates: f.geometry.rings } });
+  console.log(`outline: ${(j.features ?? []).length} feature(s)`);
+} catch (e) {
+  console.log(`outline unavailable (${e.message})`);
+}
+await mkdir(dirname(OUT), { recursive: true });
+await writeFile(`${dirname(OUT)}/${STATE.toLowerCase()}-grid.json`, JSON.stringify(grid));
+
 const out = { version: 1, state: STATE, generatedAt: pulledAt, sources, counts: { plants: plantF.length, substations: subs.length, lineFeatures: lineF.length, sites: sites.length }, sites };
 await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(out));
