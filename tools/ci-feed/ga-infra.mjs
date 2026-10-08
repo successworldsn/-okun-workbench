@@ -21,6 +21,13 @@ const arg = (f, d) => (args.includes(f) ? args[args.indexOf(f) + 1] : d);
 const STATE = arg("--state", "GA");
 const OUT = arg("--out", "data/public/ga-infra.json");
 const BBOX = { GA: [-85.61, 30.36, -80.84, 35.0] }[STATE];
+const STATE_NAMES = { GA: "Georgia" };
+const ENV = { geometry: BBOX.join(","), geometryType: "esriGeometryEnvelope", inSR: "4326", spatialRel: "esriSpatialRelIntersects" };
+/** The bbox catches neighbors along the border; keep rows whose state field says this state (any spelling). */
+const inState = (row) => {
+  const v = pick(row, ["State", "STATE", "StateName", "STATE_NAME"]);
+  return v == null || [STATE, STATE_NAMES[STATE]].some((x) => norm(x) === norm(v));
+};
 
 async function getJson(url, params = {}) {
   const body = new URLSearchParams({ f: "json", ...params });
@@ -60,7 +67,7 @@ async function queryAll(url, where, extra = {}) {
 }
 
 /** Find a layer by search, keep the first whose fields include every required alias group. */
-async function findLayer(envName, queries, required) {
+async function findLayer(envName, queries, required, minInState = 1) {
   if (process.env[envName]) return { url: process.env[envName], title: "(env override)" };
   for (const q of queries) {
     const j = await getJson("https://www.arcgis.com/sharing/rest/search", { q: `${q} AND (type:"Feature Service" OR type:"Map Service")`, num: "15", sortField: "numviews", sortOrder: "desc" }).catch(() => ({ results: [] }));
@@ -71,7 +78,11 @@ async function findLayer(envName, queries, required) {
       for (const l of layers.slice(0, 6)) {
         const lu = l.id == null ? r.url : `${r.url.replace(/\/$/, "")}/${l.id}`;
         const meta = await getJson(lu).catch(() => null);
-        if (meta && required.every((group) => fieldOf(meta, group))) return { url: lu, title: `${r.title} · ${meta.name} (owner ${r.owner})` };
+        if (!meta || !required.every((group) => fieldOf(meta, group))) continue;
+        // Regional copies (e.g. one FEMA region) pass the field check but hold nothing here.
+        const n = await getJson(`${lu}/query`, { where: "1=1", returnCountOnly: "true", ...ENV }).then((c) => c.count ?? 0).catch(() => 0);
+        console.log(`  candidate ${r.title} · ${meta.name}: ${n} features in ${STATE} bbox`);
+        if (n >= minInState) return { url: lu, title: `${r.title} · ${meta.name} (owner ${r.owner})` };
       }
     }
   }
@@ -105,17 +116,15 @@ const now = new Date();
 const pulledAt = now.toISOString();
 const sources = [];
 
-const plantsL = await findLayer("PLANTS_URL", ['"Power Plants" EIA', "Power Plants"], [["Plant_Code", "PLANT_CODE", "ORISPL"], ["Total_MW", "TOTAL_MW", "Install_MW", "NAMEPLATE", "SUMMER_CAP"], ["State", "STATE"]]);
-const subsL = await findLayer("SUBSTATIONS_URL", ['"Electric Substations"', "Electric Substations"], [["MAX_VOLT"], ["STATE"], ["NAME"]]);
-const linesL = await findLayer("LINES_URL", ['"Electric Power Transmission Lines"', "Transmission Lines"], [["VOLTAGE"], ["VOLT_CLASS", "OWNER", "SUB_1"]]);
+const plantsL = await findLayer("PLANTS_URL", ['"Power Plants" EIA', "Power Plants"], [["Plant_Code", "PLANT_CODE", "ORISPL"], ["Total_MW", "TOTAL_MW", "Install_MW", "NAMEPLATE", "SUMMER_CAP"]], 100);
+const subsL = await findLayer("SUBSTATIONS_URL", ['"Electric Substations" HIFLD', '"Electric Substations"', "Electric Substations"], [["MAX_VOLT"], ["NAME"]], 200);
+const linesL = await findLayer("LINES_URL", ['"Electric Power Transmission Lines"', "Transmission Lines"], [["VOLTAGE"], ["VOLT_CLASS", "OWNER", "SUB_1"]], 100);
 console.log(`plants: ${plantsL.title}\n  ${plantsL.url}\nsubstations: ${subsL.title}\n  ${subsL.url}\nlines: ${linesL.title}\n  ${linesL.url}`);
 
-const pm = await getJson(plantsL.url);
-const stateF = fieldOf(pm, ["State", "STATE"]);
-const { features: plantF } = await queryAll(plantsL.url, `${stateF}='${STATE}'`);
+const plantF = (await queryAll(plantsL.url, "1=1", ENV)).features.filter((f) => inState(f.attributes));
 const sm = await getJson(subsL.url);
-const { features: subF } = await queryAll(subsL.url, `${fieldOf(sm, ["STATE"])}='${STATE}' AND ${fieldOf(sm, ["MAX_VOLT"])}>=115`);
-const env = { geometry: BBOX.join(","), geometryType: "esriGeometryEnvelope", inSR: "4326", spatialRel: "esriSpatialRelIntersects", geometryPrecision: "5", maxAllowableOffset: "0.0005" };
+const subF = (await queryAll(subsL.url, `${fieldOf(sm, ["MAX_VOLT"])}>=115`, ENV)).features.filter((f) => inState(f.attributes));
+const env = { ...ENV, geometryPrecision: "5", maxAllowableOffset: "0.0005" };
 const lm = await getJson(linesL.url);
 const { features: lineF } = await queryAll(linesL.url, `${fieldOf(lm, ["VOLTAGE"])}>=230`, env);
 sources.push({ id: "eia_860", label: plantsL.title, url: plantsL.url, records: plantF.length, pulledAt });
@@ -190,6 +199,11 @@ for (const s of subs.filter((x) => x.kv >= 230)) {
   });
 }
 
+if (!sites.length) {
+  console.error(`No power nodes built (${plantF.length} plants, ${subF.length} substations); keeping the previous file.`);
+  if (plantF[0]) console.error("plant fields:", Object.keys(plantF[0].attributes).join(", "));
+  process.exit(1);
+}
 const out = { version: 1, state: STATE, generatedAt: pulledAt, sources, counts: { plants: plantF.length, substations: subs.length, lineFeatures: lineF.length, sites: sites.length }, sites };
 await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify(out));

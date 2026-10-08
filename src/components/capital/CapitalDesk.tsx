@@ -12,7 +12,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { LAYERS, THESIS_LABELS, ROLE_LABELS, CI_SOURCES, CI_ASSUME, ciBadge, fmtUsd, layerCounts, type SiteIntel, type Signal, type CapitalSource, type CiBadge, type CiEvidence } from "@/lib/ci-intel";
+import { LAYERS, THESIS_LABELS, ROLE_LABELS, CI_SOURCES, CI_ASSUME, analyzeSites, ciBadge, fmtUsd, layerCounts, type Site, type SiteIntel, type AssetType, type CapitalKind, type SignalKind, type CiSourceId, type Signal, type CapitalSource, type CiBadge, type CiEvidence } from "@/lib/ci-intel";
 import {
   AGENTS,
   ACTION_LABELS,
@@ -78,16 +78,28 @@ function Ev({ e, now }: { e: CiEvidence; now: Date }) {
   );
 }
 
+/** What the live infrastructure feed says about itself (data/public/ga-infra.json). */
+export interface InfraFeedMeta {
+  generatedAt: string;
+  counts: Record<string, number>;
+  sources: { label: string; url: string; records?: number }[];
+}
+
 export function CapitalDesk({
-  sites,
-  signals,
-  capital,
+  sites: sitesIn,
+  rawSites,
+  feed,
+  signals: signalsIn,
+  capital: capitalIn,
   initialDeals,
   initialMemories,
   nowIso,
   example,
 }: {
   sites: SiteIntel[];
+  /** Live mode: unscored sites from the feed, re-scored here as you add funds and signals. */
+  rawSites?: Site[];
+  feed?: InfraFeedMeta | null;
   signals: Signal[];
   capital: CapitalSource[];
   initialDeals: Deal[];
@@ -96,6 +108,12 @@ export function CapitalDesk({
   example: boolean;
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
+  const ns = example ? "" : "live:"; // live deals never mix with the example desk's
+  const [myCapital, setMyCapital] = useState<CapitalSource[]>([]);
+  const [mySignals, setMySignals] = useState<Signal[]>([]);
+  const signals = useMemo(() => [...signalsIn, ...mySignals], [signalsIn, mySignals]);
+  const capital = useMemo(() => [...capitalIn, ...myCapital], [capitalIn, myCapital]);
+  const sites = useMemo(() => (rawSites && (mySignals.length || myCapital.length) ? analyzeSites(rawSites, signals, capital, now) : sitesIn), [rawSites, sitesIn, signals, capital, now, mySignals.length, myCapital.length]);
   const [view, setView] = useState<View>("command");
   const [tab, setTab] = useState<Tab>("WHY");
   const [selId, setSelId] = useState<string | null>(null);
@@ -110,18 +128,22 @@ export function CapitalDesk({
 
   // Restore this browser's desk after mount (server and first client render must match).
   useEffect(() => {
-    setDeals(load("deals", initialDeals));
-    setMemories(load("memories", initialMemories));
-    setQueue(load("queue", []));
-    setPlaybook(load("playbook", DEFAULT_PLAYBOOK));
-    setDismissed(load("dismissed", []));
+    setDeals(load(`${ns}deals`, initialDeals));
+    setMemories(load(`${ns}memories`, initialMemories));
+    setQueue(load(`${ns}queue`, []));
+    setPlaybook(load(`${ns}playbook`, DEFAULT_PLAYBOOK));
+    setDismissed(load(`${ns}dismissed`, []));
+    setMyCapital(load(`${ns}myCapital`, []));
+    setMySignals(load(`${ns}mySignals`, []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => save("deals", deals), [deals]);
-  useEffect(() => save("memories", memories), [memories]);
-  useEffect(() => save("queue", queue), [queue]);
-  useEffect(() => save("playbook", playbook), [playbook]);
-  useEffect(() => save("dismissed", dismissed), [dismissed]);
+  useEffect(() => save(`${ns}deals`, deals), [deals]);
+  useEffect(() => save(`${ns}memories`, memories), [memories]);
+  useEffect(() => save(`${ns}queue`, queue), [queue]);
+  useEffect(() => save(`${ns}playbook`, playbook), [playbook]);
+  useEffect(() => save(`${ns}dismissed`, dismissed), [dismissed]);
+  useEffect(() => save(`${ns}myCapital`, myCapital), [myCapital]);
+  useEffect(() => save(`${ns}mySignals`, mySignals), [mySignals]);
 
   const flash = (t: string) => {
     setToast(t);
@@ -283,6 +305,12 @@ export function CapitalDesk({
     <div className="fixed inset-0 z-30 flex flex-col bg-[#02040A] text-bone">
       {header}
       {example && <div className="shrink-0 bg-status-amber/10 px-3 py-1 text-center font-mono text-[10px] tracking-wider text-status-amber">EXAMPLE DATA: every site, party, fund, signal and offer is fictional. Your deals, notes and approvals stay in this browser.</div>}
+      {!example && feed && (
+        <div className="shrink-0 bg-status-green/10 px-3 py-1 text-center font-mono text-[10px] tracking-wider text-status-green">
+          LIVE · {sites.length} Georgia power nodes from public EIA / HIFLD data, pulled {feed.generatedAt.slice(0, 10)} · {capital.length} capital sources · {signals.length} signals.{" "}
+          {!capital.length && <button onClick={() => setView("capital")} className="underline">Add the funds and buyers you know →</button>}
+        </div>
+      )}
       {mac}
       {layerBar}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -339,10 +367,10 @@ export function CapitalDesk({
           {view !== "command" && (
             <div className="absolute inset-0 z-10 overflow-y-auto bg-[#02040A]/94 p-4 backdrop-blur-sm">
               {view === "deals" && <DealsView deals={deals} setDeals={setDeals} dealId={dealId} setDealId={setDealId} playbook={playbook} recordOffer={recordOffer} memories={memories} />}
-              {view === "capital" && <CapitalView capital={capital} sites={sites} memories={memories} />}
-              {view === "signals" && <SignalsView signals={signals} now={now} />}
+              {view === "capital" && <CapitalView capital={capital} sites={sites} memories={memories} onAdd={(c) => { setMyCapital((x) => [c, ...x]); flash(`${c.name} added; every site re-scored.`); }} onRemove={(id) => setMyCapital((x) => x.filter((c) => c.id !== id))} mine={myCapital.map((c) => c.id)} />}
+              {view === "signals" && <SignalsView signals={signals} now={now} onAdd={(g) => { setMySignals((x) => [g, ...x]); flash("Signal added; nearby sites re-scored."); }} onRemove={(id) => setMySignals((x) => x.filter((g) => g.id !== id))} mine={mySignals.map((g) => g.id)} />}
               {view === "playbook" && <PlaybookView playbook={playbook} setPlaybook={setPlaybook} />}
-              {view === "sources" && <SourcesView />}
+              {view === "sources" && <SourcesView feed={feed ?? null} example={example} />}
             </div>
           )}
         </main>
@@ -766,10 +794,106 @@ function DealsView({ deals, setDeals, dealId, setDealId, playbook, recordOffer, 
   );
 }
 
-function CapitalView({ capital, sites, memories }: { capital: CapitalSource[]; sites: SiteIntel[]; memories: Memory[] }) {
+const INPUT = "rounded border border-elevated bg-[#02040A] px-2 py-1 text-[11px] text-bone placeholder:text-muted";
+const KINDS: CapitalKind[] = ["infra_fund", "private_equity", "family_office", "developer", "hyperscaler", "utility", "lender", "strategic"];
+const ASSETS: AssetType[] = ["powered_land", "datacenter", "generation", "stranded_power", "fiber", "land"];
+const SIGNAL_KINDS: SignalKind[] = ["dc_announcement", "large_load_filing", "transmission_project", "substation_project", "zoning_change", "land_sale", "ppa", "funding_round", "plant_retirement", "moratorium", "fiber_build"];
+const EVIDENCE: CiSourceId[] = ["news", "company", "sec_filing", "utility_irp", "interconnection", "county_zoning", "conversation", "manual"];
+const num = (v: string) => (v.trim() === "" || !Number.isFinite(Number(v.replace(/[$,]/g, ""))) ? null : Number(v.replace(/[$,]/g, "")));
+
+function AddCapital({ onAdd }: { onAdd: (c: CapitalSource) => void }) {
+  const [f, setF] = useState({ name: "", kind: "infra_fund" as CapitalKind, assets: ["powered_land", "datacenter"] as AssetType[], minMw: "", maxMw: "", regions: "GA, Southeast", checkMin: "", checkMax: "", lastActive: "", source: "news" as CiSourceId, detail: "", url: "" });
+  const set = (k: keyof typeof f, v: unknown) => setF({ ...f, [k]: v });
+  function submit() {
+    if (!f.name.trim()) return;
+    const at = new Date().toISOString();
+    onAdd({
+      id: `MY-C-${Date.now()}`,
+      name: f.name.trim(),
+      kind: f.kind,
+      mandate: { assetTypes: f.assets, minMw: num(f.minMw), maxMw: num(f.maxMw), regions: f.regions.split(",").map((r) => r.trim()).filter(Boolean), checkMin: num(f.checkMin), checkMax: num(f.checkMax) },
+      lastActive: f.lastActive || null,
+      evidence: { source: f.source, detail: f.detail || "Entered by you", observedAt: f.lastActive || at.slice(0, 10), url: f.url || undefined },
+    });
+    setF({ ...f, name: "", minMw: "", maxMw: "", checkMin: "", checkMax: "", detail: "", url: "" });
+  }
+  return (
+    <div className="mt-2 rounded border border-gold/30 p-2">
+      <div className="font-mono text-[9px] tracking-[0.25em] text-gold">+ ADD A FUND / BUYER YOU KNOW · stays in this browser</div>
+      <div className="mt-1 grid gap-1 md:grid-cols-4">
+        <input className={INPUT} placeholder="Name (as they publish it)" value={f.name} onChange={(e) => set("name", e.target.value)} />
+        <select className={INPUT} value={f.kind} onChange={(e) => set("kind", e.target.value)}>
+          {KINDS.map((k) => <option key={k} value={k}>{k.replace("_", " ")}</option>)}
+        </select>
+        <input className={INPUT} placeholder="Min MW" value={f.minMw} onChange={(e) => set("minMw", e.target.value)} />
+        <input className={INPUT} placeholder="Max MW" value={f.maxMw} onChange={(e) => set("maxMw", e.target.value)} />
+        <input className={INPUT} placeholder="Regions: GA, Southeast, US" value={f.regions} onChange={(e) => set("regions", e.target.value)} />
+        <input className={INPUT} placeholder="Check min $" value={f.checkMin} onChange={(e) => set("checkMin", e.target.value)} />
+        <input className={INPUT} placeholder="Check max $" value={f.checkMax} onChange={(e) => set("checkMax", e.target.value)} />
+        <input className={INPUT} type="date" title="Last seen active" value={f.lastActive} onChange={(e) => set("lastActive", e.target.value)} />
+        <select className={INPUT} value={f.source} onChange={(e) => set("source", e.target.value)}>
+          {EVIDENCE.map((k) => <option key={k} value={k}>{CI_SOURCES[k].label}</option>)}
+        </select>
+        <input className={`${INPUT} md:col-span-2`} placeholder="What shows it (e.g. 'closed $1B fund for powered land, 2026')" value={f.detail} onChange={(e) => set("detail", e.target.value)} />
+        <input className={INPUT} placeholder="Link" value={f.url} onChange={(e) => set("url", e.target.value)} />
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-ash">
+        Buys:
+        {ASSETS.map((a) => (
+          <label key={a} className="flex items-center gap-1">
+            <input type="checkbox" checked={f.assets.includes(a)} onChange={(e) => set("assets", e.target.checked ? [...f.assets, a] : f.assets.filter((x) => x !== a))} /> {a.replace("_", " ")}
+          </label>
+        ))}
+        <button onClick={submit} className="ml-auto rounded border border-gold/60 px-2 py-0.5 font-mono text-gold hover:bg-gold/10">ADD</button>
+      </div>
+    </div>
+  );
+}
+
+function AddSignal({ onAdd }: { onAdd: (g: Signal) => void }) {
+  const [f, setF] = useState({ kind: "dc_announcement" as SignalKind, title: "", date: "", where: "", county: "", mw: "", amount: "", party: "", source: "news" as CiSourceId, url: "" });
+  const set = (k: keyof typeof f, v: unknown) => setF({ ...f, [k]: v });
+  const ll = f.where.split(",").map((x) => Number(x.trim()));
+  const okLL = ll.length === 2 && ll.every(Number.isFinite) && Math.abs(ll[0]) <= 90;
+  function submit() {
+    if (!f.title.trim()) return;
+    const date = f.date || new Date().toISOString().slice(0, 10);
+    onAdd({ id: `MY-S-${Date.now()}`, kind: f.kind, title: f.title.trim(), date, lat: okLL ? ll[0] : null, lng: okLL ? ll[1] : null, county: f.county || undefined, mw: num(f.mw), amountUsd: num(f.amount), party: f.party || undefined, evidence: { source: f.source, detail: f.title.trim(), observedAt: date, url: f.url || undefined } });
+    setF({ ...f, title: "", where: "", mw: "", amount: "", party: "", url: "" });
+  }
+  return (
+    <div className="mt-2 rounded border border-gold/30 p-2">
+      <div className="font-mono text-[9px] tracking-[0.25em] text-gold">+ ADD A SIGNAL YOU SAW · stays in this browser</div>
+      <div className="mt-1 grid gap-1 md:grid-cols-4">
+        <select className={INPUT} value={f.kind} onChange={(e) => set("kind", e.target.value)}>
+          {SIGNAL_KINDS.map((k) => <option key={k} value={k}>{k.replace(/_/g, " ")}</option>)}
+        </select>
+        <input className={`${INPUT} md:col-span-3`} placeholder="What happened (headline)" value={f.title} onChange={(e) => set("title", e.target.value)} />
+        <input className={INPUT} type="date" value={f.date} onChange={(e) => set("date", e.target.value)} />
+        <input className={`${INPUT} ${f.where && !okLL ? "border-status-red/60" : ""}`} placeholder="Where: lat, lng (right-click in Google Maps)" value={f.where} onChange={(e) => set("where", e.target.value)} />
+        <input className={INPUT} placeholder="County" value={f.county} onChange={(e) => set("county", e.target.value)} />
+        <input className={INPUT} placeholder="Who (company / utility / fund)" value={f.party} onChange={(e) => set("party", e.target.value)} />
+        <input className={INPUT} placeholder="MW" value={f.mw} onChange={(e) => set("mw", e.target.value)} />
+        <input className={INPUT} placeholder="$ amount" value={f.amount} onChange={(e) => set("amount", e.target.value)} />
+        <select className={INPUT} value={f.source} onChange={(e) => set("source", e.target.value)}>
+          {EVIDENCE.map((k) => <option key={k} value={k}>{CI_SOURCES[k].label}</option>)}
+        </select>
+        <input className={INPUT} placeholder="Link" value={f.url} onChange={(e) => set("url", e.target.value)} />
+      </div>
+      <div className="mt-1 flex items-center text-[10px] text-ash">
+        Without a location a signal is listed but can&apos;t move a site&apos;s demand score.
+        <button onClick={submit} className="ml-auto rounded border border-gold/60 px-2 py-0.5 font-mono text-gold hover:bg-gold/10">ADD</button>
+      </div>
+    </div>
+  );
+}
+
+function CapitalView({ capital, sites, memories, onAdd, onRemove, mine }: { capital: CapitalSource[]; sites: SiteIntel[]; memories: Memory[]; onAdd: (c: CapitalSource) => void; onRemove: (id: string) => void; mine: string[] }) {
   return (
     <div className="mx-auto max-w-5xl">
       <h2 className="font-mono text-[11px] tracking-[0.3em] text-gold">DATABASE A · CAPITAL</h2>
+      <p className="mt-1 text-[11px] text-ash">Track who is buying and what their published mandate says. Matching a site to a fund is research; soliciting investors or taking a fee on a sale goes through a licensed partner.</p>
+      <AddCapital onAdd={onAdd} />
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-[11px]">
           <thead>
@@ -800,27 +924,42 @@ function CapitalView({ capital, sites, memories }: { capital: CapitalSource[]; s
                   </td>
                   <td className="pr-2 text-ash">{c.mandate.regions.join(", ")}</td>
                   <td className="pr-2 font-mono text-ash">{c.mandate.checkMin ? `${fmtUsd(c.mandate.checkMin)}–${c.mandate.checkMax ? fmtUsd(c.mandate.checkMax) : "∞"}` : "—"}</td>
-                  <td className="text-right font-mono text-gold">{fits.length}</td>
+                  <td className="text-right font-mono text-gold">
+                    {fits.length}
+                    {mine.includes(c.id) && (
+                      <button onClick={() => onRemove(c.id)} className="ml-2 text-muted hover:text-status-red" title="Remove">
+                        ✕
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {!capital.length && <p className="mt-2 text-[11px] text-muted">No capital sources yet. Add the funds, developers and hyperscalers you track; every site re-scores against them.</p>}
       </div>
     </div>
   );
 }
 
-function SignalsView({ signals, now }: { signals: Signal[]; now: Date }) {
+function SignalsView({ signals, now, onAdd, onRemove, mine }: { signals: Signal[]; now: Date; onAdd: (g: Signal) => void; onRemove: (id: string) => void; mine: string[] }) {
   return (
     <div className="mx-auto max-w-4xl">
       <h2 className="font-mono text-[11px] tracking-[0.3em] text-gold">SIGNALS · THE WORLD MOVING</h2>
+      <AddSignal onAdd={onAdd} />
+      {!signals.length && <p className="mt-2 text-[11px] text-muted">No signals yet. Data-center announcements, large-load filings, rezonings and moratoriums near a site raise or sink its score.</p>}
       <ul className="mt-2 space-y-1.5">
         {[...signals].sort((a, b) => b.date.localeCompare(a.date)).map((g) => (
           <li key={g.id} className="text-[12px]">
             <span className="font-mono text-muted">{g.date}</span> <span className="rounded bg-elevated px-1 font-mono text-[9px] uppercase text-ash">{g.kind.replace(/_/g, " ")}</span> <span className="text-bone">{g.title}</span>
             {g.mw ? <span className="font-mono text-gold"> · {g.mw} MW</span> : null}
             {g.amountUsd ? <span className="font-mono text-gold"> · {fmtUsd(g.amountUsd)}</span> : null}
+            {mine.includes(g.id) && (
+              <button onClick={() => onRemove(g.id)} className="ml-2 text-muted hover:text-status-red" title="Remove">
+                ✕
+              </button>
+            )}
             <Ev e={g.evidence} now={now} />
           </li>
         ))}
@@ -870,7 +1009,7 @@ function PlaybookView({ playbook, setPlaybook }: { playbook: Playbook; setPlaybo
   );
 }
 
-function SourcesView() {
+function SourcesView({ feed, example }: { feed: InfraFeedMeta | null; example: boolean }) {
   const PLAN: [string, string, string][] = [
     ["EIA-860 generator inventory", "eia.gov open data (API key, free)", "Generation, retirements, stranded capacity"],
     ["HIFLD substations + transmission", "ArcGIS open data", "Distance to substation / ≥230 kV line, kV class"],
@@ -884,7 +1023,21 @@ function SourcesView() {
   return (
     <div className="mx-auto max-w-4xl">
       <h2 className="font-mono text-[11px] tracking-[0.3em] text-gold">SOURCES · WHAT FEEDS THE MACHINE</h2>
-      <p className="mt-1 text-[11px] text-ash">This version runs on example data. The engine, scoring, matching, negotiation and autonomy rules are real; these are the free sources to wire next, in order.</p>
+      {feed ? (
+        <div className="mt-2 rounded border border-status-green/40 p-2 text-[11px]">
+          <div className="font-mono text-[9px] tracking-[0.25em] text-status-green">● LIVE FEED · pulled {feed.generatedAt.slice(0, 16).replace("T", " ")} UTC · refreshes weekly</div>
+          <div className="mt-1 text-ash">{Object.entries(feed.counts).map(([k, v]) => `${v.toLocaleString()} ${k}`).join(" · ")}</div>
+          <ul className="mt-1">
+            {feed.sources.map((s) => (
+              <li key={s.url} className="truncate text-ash">
+                {s.label}{s.records != null ? ` (${s.records.toLocaleString()})` : ""} · <a href={s.url} target="_blank" rel="noreferrer" className="text-cyan hover:underline">{s.url}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-1 text-[11px] text-ash">{example ? "This view runs on example data. " : ""}The engine, scoring, matching, negotiation and autonomy rules are real; these are the free sources, in order.</p>
+      )}
       <table className="mt-2 w-full text-[11px]">
         <tbody>
           {PLAN.map(([a, b, c]) => (

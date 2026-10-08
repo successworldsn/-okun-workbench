@@ -1,13 +1,24 @@
 import { analyzeSites } from "@/lib/ci-intel";
 import { demoCapital, demoDeals, demoMemories, demoSignals, demoSites } from "@/lib/ci-demo";
+import { loadInfraFeed } from "@/lib/ci-store";
 import { CapitalDesk } from "@/components/capital/CapitalDesk";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "God's Eye · AI Infrastructure Intelligence" };
 
-/** v1 runs on fictional EXAMPLE data; the free-source feed plan is on the SOURCES view. */
-export default function CapitalCommand() {
+/**
+ * LIVE when the public infrastructure feed is readable: real Georgia plants and
+ * substations; funds and signals are the ones you add. Otherwise fictional
+ * EXAMPLE data, labeled as such.
+ */
+export default async function CapitalCommand() {
   const now = new Date();
+  const feed = await loadInfraFeed();
+  if (feed) {
+    const sites = analyzeSites(feed.sites, [], [], now);
+    const { sites: _omit, ...meta } = feed;
+    return <CapitalDesk sites={sites} rawSites={feed.sites} feed={meta} signals={[]} capital={[]} initialDeals={[]} initialMemories={[]} nowIso={now.toISOString()} example={false} />;
+  }
   const signals = demoSignals(now);
   const capital = demoCapital(now);
   const sites = analyzeSites(demoSites(now), signals, capital, now);
