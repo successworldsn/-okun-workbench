@@ -1,17 +1,17 @@
-# Optional CI deploy of geye.successagenticlabs.com (assets-only Cloudflare
-# Worker, deploy/geye/wrangler.jsonc). The normal path is a laptop deploy with
-# wrangler's OAuth login, after you say deploy. This workflow runs only:
-#   - by hand (Actions -> geye deploy -> Run workflow), or
-#   - after each weekly GA infrastructure feed, if the repo variable
-#     GEYE_AUTO_DEPLOY is "true" (you opt in to weekly data refreshes).
-# Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID; without
-# them it builds the site and stops. Public data only: /deals is EXAMPLE data.
+# Weekly refresh of geye.successagenticlabs.com (assets-only Cloudflare Worker,
+# deploy/geye/wrangler.jsonc). The owner opted in to weekly refreshes
+# (2026-10-08): after each successful Monday GA infrastructure feed on main,
+# this rebuilds the site with the new data and deploys it. It can also be run by
+# hand (Actions -> geye deploy -> Run workflow). Needs repo secrets
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID; without them it builds the
+# site and stops. Public data only: /deals is EXAMPLE data.
 name: geye deploy
 
 on:
   workflow_run:
     workflows: ["GA infrastructure feed"]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || (vars.GEYE_AUTO_DEPLOY == 'true' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,5 +47,8 @@ jobs:
             echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set; built the site but did not deploy."
             exit 0
           fi
-          npx --yes wrangler@4 deploy -c deploy/geye/wrangler.jsonc
-          echo "Live: https://geye.successagenticlabs.com"
+          npx --yes wrangler@4 deploy -c deploy/geye/wrangler.jsonc 2>&1 | tee deploy.log
+          # Version ids for the record ("LIVE <date>, version X; rollback Y").
+          echo "### geye deployed $(date -u +%Y-%m-%d)" >> "$GITHUB_STEP_SUMMARY"
+          grep -i "version id" deploy.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo "Live: https://geye.successagenticlabs.com" >> "$GITHUB_STEP_SUMMARY"

@@ -18,8 +18,8 @@
  *   node ../../../success-agentic-labs/node_modules/wrangler/bin/wrangler.js deploy
  *
  * Then record "LIVE <date>, version <id>; rollback <previous id>" in memory.
- * CI (.github/workflows/geye-deploy.yml) deploys only if the repo has
- * CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID secrets; it is off by default.
+ * Weekly refresh: .github/workflows/geye-deploy.yml deploys after each Monday
+ * feed on main (needs CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID secrets).
  */
 {
 	"$schema": "../../node_modules/wrangler/config-schema.json",

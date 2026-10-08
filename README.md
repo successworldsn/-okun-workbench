@@ -300,9 +300,13 @@ The wrangler path assumes this repo sits next to `success-agentic-labs` in
 `fwdclaudecode`. After a deploy, record `LIVE <date>, version <id>; rollback
 <previous id>` in memory.
 
-`.github/workflows/geye-deploy.yml` is optional. It runs by hand, or weekly
-after the infrastructure feed when the repo variable `GEYE_AUTO_DEPLOY` is
-`true`. It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
+**Weekly refresh is on.** `.github/workflows/geye-deploy.yml` rebuilds and
+deploys after every successful Monday infrastructure feed on `main`, and can be
+run by hand. Each run's summary records the deployed version id. It needs the
+repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+(`df84774bba1198ab9b93ba0901ab0073`). Create the token with the "Edit
+Cloudflare Workers" template, then add **Zone · DNS · Edit** for
+successagenticlabs.com so the first deploy can attach the custom domain.
 
 ## Setup
 
