@@ -1,209 +1,237 @@
 # Changing Hearts LLC — Media Business Blueprint
 
-*"A magazine business on steroids": a cinematic, multi-revenue media brand.*
-Prepared 2026-10-08.
+*"Care, made memorable." Plus a magazine business on steroids.*
+Prepared 2026-10-08, based on web research and the site prototype
+`changing_hearts_experience_v3.html`.
 
 ---
 
-## 1. What the research found
+## 1. What Changing Hearts is today (from the v3 site)
 
-**No public footprint for Changing Hearts as a media or magazine company yet.**
-Searches for "Changing Hearts LLC" and "Changing Hearts" magazine found no
-publication by that name. The name is already used by several unrelated LLCs:
+The v3 prototype describes a **care-community experience program funded by local
+sponsors**:
+
+| Program | What it is |
+|---|---|
+| 01 / READ — **The Reading Room** | Books and shared reading moments |
+| 02 / WELCOME — **The Welcome Moment** | Welcome packs and small gestures for new residents |
+| 03 / CONNECT — **The Story Corner** | Creative activities and shared stories |
+
+The business model on the site is **"Put your brand behind a good moment."** Local
+businesses sponsor programs. Changing Hearts runs them in care communities and sends
+partners a delivery recap. The process is listen first, make it happen, close the loop.
+
+**This is a strong base for a media company.** The Story Corner already produces the
+most valuable raw material there is: real life stories from elders, families and
+caregivers. Today those stories stay in the room. The "magazine on steroids" plan
+**turns every program into content, and every piece of content into sponsor value
+and revenue.**
+
+---
+
+## 2. Research: the name and the market
+
+### ⚠️ Name conflict is a real risk, and bigger because you are in care
+No magazine or media company named Changing Hearts was found online. But several
+existing LLCs use the name, **most of them in the care and health space, which is
+your space:**
 
 | Entity | Location | Business |
 |---|---|---|
-| Changing Hearts Home Care, LLC | Indianapolis, IN | Home and elder care (registered 2022) |
-| Changing Hearts, LLC | Phoenix, AZ | Formed Apr 2024, industry not listed |
-| Changing Hearts, LLC | Dayton, OH | Community and behavioral health agency |
-| Changing Hearts Counseling – LLC | Marysville, CA | Mental-health counseling (formed Mar 2024) |
+| Changing Hearts Home Care, LLC | Indianapolis, IN | Home and elder care (registered 2022, 11–50 staff) |
 | Changing Hearts Home Care LLC | Loganville, GA | Home health agency |
+| Changing Hearts, LLC | Dayton, OH | Community and behavioral health agency |
+| Changing Hearts Counseling – LLC | Marysville, CA | Mental-health counseling |
+| Changing Hearts, LLC | Phoenix, AZ | Formed 2024, industry not listed |
 
-**What this means:**
-- The **media and magazine space is open** under this name. No competing publication showed up.
-- An LLC registration only protects the name in its own state. **A federal trademark is
-  what protects a brand nationally.** Before spending on branding:
-  1. Search USPTO (tmsearch.uspto.gov) for "Changing Hearts" in Class 16 (printed
-     magazines), Class 41 (online publications, entertainment, events) and Class 9
-     (downloadable media).
-  2. File a trademark application in those classes. The existing LLCs are in
-     healthcare, a different class, so registration is likely possible but not
-     guaranteed. Have a trademark attorney confirm.
-  3. Secure the matching domain names and social handles (IG, TikTok, YouTube, X,
-     Threads, Facebook, LinkedIn, Spotify/Apple Podcasts) now, even before launch.
-  4. Consider a distinctive sub-brand or wordmark (e.g. **CHANGING HEARTS** with a
-     tagline such as *"Stories That Move People"*) so the brand is easy to protect
-     and to find in search.
+Because you also work with care communities, a trademark examiner or one of these
+companies could argue that customers would be confused. **Before investing in print,
+video or signage:**
+1. Have a trademark attorney run a clearance search at USPTO for "Changing Hearts" in
+   Class 41 (education, entertainment, publications, events), Class 16 (printed
+   magazines and books), Class 35 (sponsorship and marketing services) and Class 44
+   (care services).
+2. If it is clear, file in Classes 41, 16 and 35. If not, add a distinctive element
+   (for example **Changing Hearts Story Co.** or **Changing Hearts Media**) or a
+   unique magazine title under the company, such as *"Heartbound"* or
+   *"The Story Corner Magazine"*.
+3. Secure the domains and social handles for whatever name clears.
 
-**Industry direction (2026):** publishers are moving away from relying on ads alone.
-- 76% of commercial publishers say paid content (subscriptions and memberships) is their
-  main focus.
-- Events are the fastest-growing revenue line. Condé Nast grew events revenue 40% in
-  2025 and projects another 22% in 2026.
+### Market signals (2026)
+- Publishers are moving to **mixed revenue**: 76% say paid content is their main
+  focus, and events are the fastest-growing line (Condé Nast events revenue rose 40% in
+  2025, with another 22% projected for 2026).
 - Direct-sold ads, branded content, programmatic ads, events and video ads are the top
-  five revenue streams.
-- 37% of publishers see content licensing (platforms and AI companies paying for
-  content) as a major growth lever.
-
-The winning model is a **brand with six or more revenue streams**, not a publication
-with one.
-
----
-
-## 2. Positioning: what Changing Hearts *is*
-
-> **Changing Hearts is a cinematic media brand about human transformation:
-> people, businesses and communities that changed, and how they did it.**
-
-The name is the strategy. "Changing hearts" covers stories of redemption, love, faith,
-comeback, entrepreneurship, health, healing and impact. That emotional territory
-drives shares, saves, and brand-sponsor dollars, because brands pay a premium to sit
-next to uplifting, trusted content.
-
-**Content pillars** (each one can become a sponsorable franchise):
-
-1. **Comeback**: people who rebuilt their lives (addiction, prison, loss, bankruptcy).
-2. **Builders**: founders and small businesses that changed their community.
-3. **Love and Family**: relationships, reunions, marriage, fatherhood and motherhood.
-4. **Faith and Purpose**: spiritual journeys and finding meaning.
-5. **Heal**: mental and physical health transformations.
-6. **Culture**: music, art, fashion and film from creators who move hearts.
-
-**Look and feel ("cinematic"):** full-bleed video headers, documentary-style short
-films, magazine-grade photography, scroll-driven storytelling (like the NYT's
-"Snow Fall" format), and a consistent color grade and typography so every piece
-looks like a scene from a film.
+  publisher revenue streams.
+- **Your edge:** your sponsors are not buying ad space. They are buying *goodwill they
+  can prove*. That is worth more than CPM ads, and it fits local banks, credit unions,
+  hospitals, law firms (estate and elder law), funeral homes, pharmacies, realtors,
+  insurance agents and home-service companies. All of them want to reach seniors
+  and their adult children.
 
 ---
 
-## 3. The revenue engine: 10 streams
+## 3. Positioning
 
-| # | Stream | How it works | Priority |
+> **Changing Hearts creates meaningful moments in care communities and turns them
+> into stories the whole city sees.**
+
+Three layers, each feeding the next:
+
+1. **Programs** (what you already do): Reading Room, Welcome Moment, Story Corner.
+2. **Media** (the "magazine on steroids"): a cinematic magazine, film series and
+   podcast built from the stories those programs uncover.
+3. **Community** (the flywheel): families, volunteers, sponsors and readers who come
+   back for the stories and fund the next moment.
+
+**Content franchises** (each one is sponsorable):
+- **"Lifetimes"**: cinematic 3–5 minute portraits of residents' life stories (war
+  veterans, first-generation immigrants, civil-rights era, love stories of 60+ years).
+- **"Letters to My Younger Self"**: residents read advice to camera. Very shareable.
+- **"The Caregivers"**: honoring nurses, aides and staff. Care facilities love this,
+  and it helps them recruit.
+- **"Welcome Home"**: a new resident's first week, told with dignity.
+- **"Generations"**: students and youth groups paired with elders.
+- **"Partner Spotlight"**: the local business behind each moment (sponsor value).
+
+---
+
+## 4. The revenue engine: 10 streams
+
+| # | Stream | How it works | Example pricing |
 |---|---|---|---|
-| 1 | **Membership: "The Inner Circle"** | $9–12/mo or $99/yr: ad-free access, full-length films, digital and print editions, members-only live sessions, community app | 🔥 Core |
-| 2 | **Brand partnerships and branded content** | Sponsored series and short docs ("Changing Hearts presents… powered by [Brand]"). $10k–$75k per series | 🔥 Core |
-| 3 | **Live events** | An annual *Changing Hearts Awards / Gala*, city tours, workshops. Revenue from tickets, sponsors, VIP tables and livestream passes | 🔥 Core |
-| 4 | **Collector print edition** | Quarterly premium print issue ($20–35, coffee-table quality) and an annual "Hearts of the Year" book. High margin, makes the brand feel prestigious | High |
-| 5 | **Video and podcast** | YouTube revenue share, podcast ads ($25–50 CPM), and licensing documentaries to streamers and FAST channels | High |
-| 6 | **Feature packages** | Businesses and individuals pay for professionally produced feature stories with cinematic photo and video. Must be clearly labeled as sponsored | High |
-| 7 | **Studio and agency services** | Rent the production team to brands, churches, nonprofits and founders for documentary-style content | High |
-| 8 | **Commerce** | Merch (apparel, journals, prints), affiliate links in gift guides, and a curated "Changing Hearts Approved" marketplace | Medium |
-| 9 | **Courses and coaching** | "Tell Your Story" storytelling course, creator academy, speaker training | Medium |
-| 10 | **Content licensing** | Syndicate stories to other outlets, and license the archive to platforms and AI companies | Later |
+| 1 | **Program sponsorships** (your current core) | Tiered packages per community or per month: *Moment* (one event), *Season* (quarterly), *Founding Heart* (annual, naming rights on a program) | $500 / $2,500 / $10k–25k |
+| 2 | **Media-boosted sponsorships** | Same as above, plus the sponsor appears in the film, magazine and newsletter. This is the upsell that justifies 3–5× pricing | +$1,500–$7,500 |
+| 3 | **Care-community program fees** | Senior-living operators pay for a managed engagement program, a resident-welcome kit, and stories they can use in marketing and recruiting | $300–$1,500/mo per community |
+| 4 | **Family legacy products** ⭐ | Families buy a professionally produced **life-story film** or **keepsake book** of their loved one's Story Corner interview. High emotion, high margin | $250–$2,500 per family |
+| 5 | **The magazine: digital + collector print** | Free digital edition to grow reach. A quarterly premium print issue sold, given to communities and sponsors, and mailed to members | $15–25/issue; ads $500–$3k/page |
+| 6 | **Membership: "Heart Circle"** | Readers and families pay monthly to fund a moment, get print issues and members-only films, and see their impact | $7–15/mo |
+| 7 | **Events** | An annual **Changing Hearts Gala / Lifetimes Film Night** premiering the year's films. Sponsors, tables, tickets, auction | $50k–$250k per event at scale |
+| 8 | **Studio services** | Produce story films for senior-living chains, hospitals, hospices and nonprofits | $3k–$15k per project |
+| 9 | **Corporate CSR and employee volunteering** | Companies buy turnkey "volunteer days" (reading, welcome-pack assembly) for their staff | $2,500–$10k per day |
+| 10 | **Grants and foundation funding** | Loneliness, aging, literacy and intergenerational grants (AARP Foundation, community foundations, United Way, local hospital foundations). Best through a separate nonprofit arm | Varies |
 
-**Nonprofit arm (optional, powerful):** Pair the brand with a *Changing Hearts
-Foundation* that funds a featured person each issue. The mission-driven angle draws
-press and corporate CSR budgets, and it makes the brand sponsor-friendly. Keep the
-foundation legally separate, with its own 501(c)(3), books and counsel.
+> **Compliance note:** if you take grants or tax-deductible donations, set up a
+> separate 501(c)(3) foundation with its own books. Keep the LLC as the for-profit
+> media and services company. Talk to a CPA or attorney.
 
 ---
 
-## 4. Path to $1M a year (illustrative)
-
-These are **targets, not guarantees**. They show the scale needed:
+## 5. Path to $1M a year (illustrative targets, not guarantees)
 
 | Stream | Assumption | Annual |
 |---|---|---|
-| Membership | 2,500 members × ~$9/mo | ~$270,000 |
-| Brand partnerships | 10 sponsors × $25k average | $250,000 |
-| Events | 2 events: ~$120k tickets + ~$80k sponsors | $200,000 |
-| Studio and agency services | ~8 client productions × $12.5k | $100,000 |
-| Commerce, print and affiliate | merch, print issues, gift guides | $100,000 |
-| Video, podcast and licensing | YouTube, podcast ads, syndication | $80,000 |
+| Program and media sponsorships | 40 sponsors × $5k average | $200,000 |
+| Care-community program fees | 30 communities × $700/mo | $252,000 |
+| Family legacy films and books | 250 families × $800 average | $200,000 |
+| Gala and events | 1 gala + 2 film nights | $150,000 |
+| Studio services | 10 projects × $8k | $80,000 |
+| Corporate volunteer days | 12 days × $5k | $60,000 |
+| Magazine (print, ads) and membership | print sales, ad pages, ~400 members | $60,000 |
 | **Total** | | **≈ $1,000,000** |
 
-**The math to watch:** a typical 2–5% conversion from free email subscribers to paid
-members means **roughly 50k–125k email subscribers** are needed for 2,500 paying members.
-**The email list is the most valuable asset.** Social followers are rented; the email
-list is owned.
+**Key insight:** in your model, **care communities are the content source and the
+distribution**, so you don't need millions of followers to reach $1M. Thirty
+communities, forty sponsors and a strong family-legacy offer get you there. That
+is far more achievable than ad-based media.
 
 ---
 
-## 5. The website: "cinematic magazine" feature set
+## 6. Upgrading the v3 site into the "cinematic magazine"
 
-**Must-have at launch (MVP):**
-- Cinematic homepage: autoplay muted hero film, a featured story with scroll
-  animations, and a "Story of the Week".
-- Story pages: long-form layout with full-bleed images, embedded video, pull quotes,
-  reading progress and share cards.
-- Email capture everywhere: exit intent, inline offers, and a free "Weekly Heart"
-  newsletter.
-- Membership paywall: a metered model (e.g. 3 free stories a month) with Stripe billing.
-- "Submit Your Story" form: a free, endless source of content and leads.
-- Partner page with a media kit, audience stats and an inquiry form.
-- Fast and mobile-first: most traffic will come from social on phones.
+### Fixes to the current v3 prototype
+1. **The contact form has no recipient.** It builds `mailto:?subject=…`, so the email
+   draft opens with an empty "To" field and is easy to lose. Put in the real address
+   (`mailto:hello@yourdomain.com?...`) or, better, a real form backend
+   (Formspree, Netlify Forms, or a Next.js API route + Resend) that saves every lead.
+2. **The page file is about 5 MB** because 4 images are embedded as base64. Move the images
+   to separate compressed files (WebP or AVIF), lazy-load them, and serve them from a
+   CDN. On a phone this will cut load time a lot.
+3. **There is no email capture.** Add a "Get the stories" newsletter sign-up on every
+   page. The list is the most valuable asset.
+4. **There is no proof yet.** Add numbers ("1,240 books delivered · 18 communities ·
+   37 partners"), photos (with signed releases), and 2–3 short testimonials.
+5. **Add Open Graph and social share tags** (`og:title`, `og:image`) so links look
+   cinematic when shared, plus privacy-respecting analytics (Plausible or GA4).
+6. **Partner page:** show real sponsor tiers and prices, a downloadable media kit, and
+   a sample delivery recap. Sponsors buy faster when they can see what they get.
 
-**Phase 2:**
-- Video hub (Netflix-style rows by pillar) and podcast player.
-- Member community (Circle, Discord, or a built-in forum).
-- Digital flip-book edition and print-issue store.
-- Events pages with ticketing (Eventbrite or Tito embed, or native Stripe).
-- Shop (Shopify Buy Button or Shopify headless).
+### New sections to add
+- **Stories / Magazine**: a cinematic story feed with full-bleed hero video,
+  scroll-driven long-form pages, and a "Lifetimes" film gallery.
+- **Preserve a Story**: the family legacy product page with packages and booking
+  (Stripe Checkout or Calendly).
+- **Heart Circle**: membership sign-up with Stripe subscriptions.
+- **Events**: gala and film-night ticketing.
+- **Impact dashboard**: live counts of moments delivered, by community and sponsor.
+  This puts your "close the loop" promise on the page.
+- **Shop**: print issues, keepsake books, merch.
 
-**Suggested stack:** Next.js (same as this repo) + a headless CMS (Sanity or
-Contentful) + Mux or Cloudflare Stream for video + Stripe for memberships + Beehiiv or
-Ghost for the newsletter + Vercel hosting. Ghost alone is a strong all-in-one option
-for a faster, cheaper launch (CMS, newsletter and paid memberships built in).
-
----
-
-## 6. Growth playbook: making it *popular*
-
-1. **Short-form first.** Cut every feature into 3–5 vertical clips (TikTok, Reels,
-   Shorts) with an emotional hook in the first 2 seconds. Transformation
-   "before → after" stories are among the best-performing formats on social.
-2. **Make subjects the distribution.** Every featured person shares their own story.
-   Give them ready-made share kits (clips, quote cards, a "As featured in Changing
-   Hearts" badge).
-3. **Nominations engine.** "Nominate someone who changed your heart" drives viral
-   tagging, story leads and email sign-ups at once.
-4. **Annual awards.** A *Changing Hearts 100* list brings press, sponsor money and
-   nominees who promote it to their own audiences.
-5. **Collaborations.** Co-produce with creators, churches, HBCUs, nonprofits and
-   local businesses, then cross-promote to their audiences.
-6. **SEO evergreen hub.** "How I overcame…" and "How to…" guides that rank on Google
-   for years.
-7. **Newsletter referral program.** "Refer 3 friends, get the print issue" (a
-   Morning Brew-style ladder).
+### Suggested stack
+Next.js (same as this repo) + Sanity CMS for stories + Mux or Cloudflare Stream
+for video + Stripe for memberships, legacy packages and tickets + Beehiiv or
+Resend for the newsletter + Vercel hosting. Faster alternative: Ghost (CMS,
+newsletter and paid membership in one) with your v3 design turned into a Ghost theme.
 
 ---
 
-## 7. 90-day launch plan
+## 7. Growth playbook: making it popular
+
+1. **Every program produces content.** At each Reading Room or Story Corner, capture
+   one story (with consent). That becomes 1 film, 3–5 vertical clips and 1 article.
+2. **Elder stories go viral.** Short clips of seniors sharing wisdom, love stories
+   and reactions get huge reach on TikTok, Reels and Shorts. Hook in the first 2
+   seconds, captions always on.
+3. **Families are the distribution.** Every featured resident's family shares the
+   film. Make it easy with a share link and an "As featured in Changing Hearts" card.
+4. **Sponsors share too.** Give every partner a ready-made social post and video
+   clip showing *their* moment. They promote you to their customers for free.
+5. **Nominations.** "Nominate someone whose story deserves to be told" brings in
+   leads, families and legacy-product customers.
+6. **Annual "Lifetimes" film night** brings press coverage, sponsor money and a big
+   family turnout.
+7. **Local press and TV.** Pitch the best story each month to local news. Elder
+   stories with heart are what morning shows and weekend features look for.
+
+---
+
+## 8. 90-day plan
 
 | Weeks | Actions |
 |---|---|
-| 1–2 | Trademark search and filing, domain and social handles, brand identity (logo, color grade, type), media kit draft |
-| 3–4 | Build the MVP site (Ghost or Next.js), set up newsletter and Stripe, create "Submit Your Story" form |
-| 5–8 | Produce **10 launch stories** (at least 3 with short films) and bank 60 short clips. Pitch 20 local brands for a founding-sponsor package |
-| 9–10 | Launch the site, daily short-form posting, weekly newsletter, open nominations for the first awards list |
-| 11–12 | Open founding membership (discounted "Founding Heart" lifetime or annual tier), announce the first live event, review numbers and double down on the top 2 pillars |
+| 1–2 | Trademark clearance (§2), domain and handles, fix the v3 form and image size, add newsletter capture and analytics |
+| 3–4 | Create the sponsor tier sheet, media kit and sample recap. Write consent and release forms. Price the family legacy packages |
+| 5–8 | Run programs at 3–5 pilot communities and capture 10 stories (at least 3 filmed). Sign 5–10 founding sponsors. Launch the Stories section |
+| 9–10 | Publish 3 clips a week, a weekly newsletter, and the first digital magazine issue. Pitch local media |
+| 11–12 | Open Heart Circle membership and family legacy bookings. Announce the first Lifetimes Film Night. Review numbers and double down |
 
-**KPIs to track weekly:** email subscribers, open rate (target 40%+), free-to-paid
-conversion, short-form views per clip, story submissions, sponsor pipeline value.
+**Weekly KPIs:** communities served, moments delivered, stories captured,
+sponsor pipeline ($), legacy packages sold, email subscribers, views per clip.
 
 ---
 
-## 8. Risks and guardrails
+## 9. Guardrails (critical in care settings)
 
-- **Name conflict:** do the trademark check before printing anything (see section 1).
-- **Paid features:** label sponsored and paid stories clearly. FTC endorsement rules
-  require disclosure, and readers' trust is the product.
-- **Consent:** get signed releases for every person filmed or photographed,
-  especially minors and people sharing sensitive histories (addiction, abuse, health).
-- **Production cost creep:** "cinematic" can get expensive. Start with one strong
-  shooter-editor and a repeatable template, then scale.
-- **Platform dependence:** treat social media as a funnel to the owned email list,
-  not as the business.
+- **Consent and dignity first.** Get signed media releases from every resident, or
+  their legal representative when there is cognitive decline. Get facility
+  approval, and offer opt-outs at any time. Never film residents in vulnerable
+  situations.
+- **Privacy:** don't publish health conditions without explicit consent. If you
+  partner with healthcare providers, ask counsel whether HIPAA applies.
+- **Sponsor disclosure:** label sponsored content clearly (FTC rules). Sponsors never
+  approve or edit residents' stories.
+- **Background checks** for staff and volunteers entering care communities.
+- **Insurance:** general liability plus media liability (errors and omissions).
 
 ---
 
 ### Sources
 - BBB, Changing Hearts Home Care, LLC: https://www.bbb.org/us/in/indianapolis/profile/home-care/changing-hearts-home-care-llc-0382-90043958
 - ZoomInfo, Changing Hearts Home Care: https://www.zoominfo.com/c/changing-hearts-home-care-llc/1332431206
-- Changing Hearts, LLC (Phoenix, AZ): https://www.bizprofile.net/az/phoenix/changing-hearts-llc
-- Changing Hearts Counseling – LLC (Marysville, CA): https://www.bizprofile.net/ca/marysville/changing-hearts-counseling-llc
-- Changing Hearts, LLC (Dayton, OH): https://www.vitadox.com/practice/dayton-oh-45403/changing-hearts-llc/934vKM7K8odqrp8HJmPsnB
 - Changing Hearts Home Care LLC (Loganville, GA): https://ltrl.com/practices/fee25595-ccc6-44ea-8a83-08e8995d46b4
+- Changing Hearts, LLC (Dayton, OH): https://www.vitadox.com/practice/dayton-oh-45403/changing-hearts-llc/934vKM7K8odqrp8HJmPsnB
+- Changing Hearts Counseling – LLC (Marysville, CA): https://www.bizprofile.net/ca/marysville/changing-hearts-counseling-llc
+- Changing Hearts, LLC (Phoenix, AZ): https://www.bizprofile.net/az/phoenix/changing-hearts-llc
 - Digiday+ Research, publisher revenue streams 2026: https://digiday.com/media/digiday-research-how-dow-jones-forbes-the-guardian-and-other-publisher-revenue-streams-are-shifting-in-2026/
 - Adweek, Condé Nast events revenue: https://www.adweek.com/media/conde-nast-events-revenue-2026/
 - Mediaweek, where publishers think the money will be in 2026: https://www.mediaweek.com.au/publishing/this-is-where-publishers-think-the-money-will-be-in-2026
