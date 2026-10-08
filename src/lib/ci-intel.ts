@@ -108,7 +108,7 @@ export interface Signal {
 }
 
 export type Zoning = "industrial" | "heavy_industrial" | "agricultural" | "commercial" | "mixed" | "unknown";
-export type ExistingUse = "vacant" | "farm" | "warehouse" | "industrial_plant" | "retired_plant" | "mining" | "office" | "unknown";
+export type ExistingUse = "vacant" | "farm" | "warehouse" | "industrial_plant" | "retired_plant" | "power_plant" | "substation" | "mining" | "office" | "unknown";
 
 export interface Site {
   id: string;
@@ -117,7 +117,8 @@ export interface Site {
   state: string;
   lat: number;
   lng: number;
-  acres: number;
+  /** null for a power node from infrastructure data: the land around it isn't identified yet. */
+  acres: number | null;
   zoning: Zoning;
   existingUse: ExistingUse;
   owner?: string;
@@ -246,9 +247,10 @@ function fiberFactor(s: Site): Factor {
 function landFactor(s: Site): Factor {
   const f: Factor["findings"] = [];
   const ev = s.evidence.land ? [s.evidence.land] : [];
+  if (s.acres == null) return { key: "land", score: 30, findings: [], unknowns: ["Land around the node (sweep parcels within 3 mi)"] };
   const score = s.acres >= 200 ? 90 : s.acres >= 100 ? 75 : s.acres >= 50 ? 55 : s.acres >= 20 ? 30 : 10;
   f.push({ text: `${s.acres} acres (fits ~${Math.round(s.acres * CI_ASSUME.mwPerAcre)} MW of campus by the ${CI_ASSUME.mwPerAcre} MW/acre screen)`, evidence: ev });
-  if (s.existingUse === "retired_plant" || s.existingUse === "industrial_plant")
+  if (s.existingUse === "retired_plant" || s.existingUse === "industrial_plant" || s.existingUse === "power_plant")
     f.push({ text: `Existing ${s.existingUse.replace("_", " ")}: interconnection and heavy-load history on site`, evidence: ev });
   return { key: "land", score, findings: f, unknowns: s.owner ? [] : ["Owner of record"] };
 }
@@ -307,6 +309,7 @@ export function siteAssetTypes(s: Site): AssetType[] {
   if (mw >= CI_ASSUME.minUsefulMw) t.push("powered_land", "datacenter");
   if (has(s.power.onsiteGenerationMw) && s.power.onsiteGenerationMw > 0) t.push("generation");
   if (s.existingUse === "retired_plant" || (s.existingUse === "industrial_plant" && mw >= 50)) t.push("stranded_power");
+  if (s.existingUse === "power_plant") t.push("generation");
   return t;
 }
 
@@ -385,13 +388,14 @@ export function constellation(s: Site, matches: CapitalMatch[], signals: Signal[
 // ─── Valuation screen ───────────────────────────────────────────────────────
 
 export interface SiteValue {
-  raw: number;
+  raw: number | null;
   powered: number | null;
   uplift: number | null;
   basis: string;
 }
 
 export function valueSite(s: Site): SiteValue {
+  if (s.acres == null) return { raw: null, powered: null, uplift: null, basis: "No land identified around this power node yet: sweep the parcels within a few miles, then value them." };
   const raw = Math.round(s.acres * CI_ASSUME.rawLandPerAcre);
   const mw = deliverableMw(s).mw ?? 0;
   const usableAcres = Math.min(s.acres, mw / CI_ASSUME.mwPerAcre);
@@ -408,10 +412,11 @@ export function valueSite(s: Site): SiteValue {
 
 export const CI_WEIGHTS = { power: 0.3, fiber: 0.12, land: 0.13, zoning: 0.1, water: 0.08, activity: 0.14, capital: 0.13 } as const;
 
-export type Thesis = "powered_land" | "stranded_power" | "datacenter_campus" | "land_bank" | "no_go";
+export type Thesis = "powered_land" | "stranded_power" | "colocation" | "datacenter_campus" | "land_bank" | "no_go";
 export const THESIS_LABELS: Record<Thesis, string> = {
   powered_land: "Powered-land sale to a developer",
   stranded_power: "Stranded / underutilized power conversion",
+  colocation: "Co-location next to existing generation",
   datacenter_campus: "Data-center campus (develop / JV)",
   land_bank: "Land bank: option it and wait for power",
   no_go: "No-go",
@@ -459,7 +464,8 @@ export function analyzeSite(s: Site, signals: Signal[], capital: CapitalSource[]
   const con = constellation(s, matches, signals, now);
   const mw = deliverableMw(s).mw ?? 0;
   const thesisList: SiteIntel["theses"] = [
-    { key: "powered_land", fit: clamp(Math.round(0.5 * factors.power.score + 0.2 * factors.land.score + 0.3 * factors.capital.score)), why: mw >= 50 ? `${mw} MW path + ${s.acres} acres: sell or option to a developer` : "Needs a credible ≥50 MW path first" },
+    { key: "powered_land", fit: clamp(Math.round(0.5 * factors.power.score + 0.2 * factors.land.score + 0.3 * factors.capital.score)), why: mw >= 50 ? (s.acres != null ? `${mw} MW path + ${s.acres} acres: sell or option to a developer` : `${mw} MW node: find the land next to it, then option it to a developer`) : "Needs a credible ≥50 MW path first" },
+    { key: "colocation", fit: s.existingUse === "power_plant" ? clamp(Math.round(0.55 * factors.power.score + 0.25 * factors.capital.score + 0.2 * factors.activity.score + 15)) : 0, why: "Load next to existing generation: co-location / behind-the-meter talks with the plant owner and utility" },
     { key: "stranded_power", fit: s.existingUse === "retired_plant" || s.existingUse === "industrial_plant" ? clamp(Math.round(0.6 * factors.power.score + 0.4 * factors.activity.score + (has(s.power.onsiteGenerationMw) ? 30 : 0))) : 0, why: "Existing interconnection / generation that isn't fully used" },
     { key: "datacenter_campus", fit: clamp(Math.round(0.35 * factors.power.score + 0.2 * factors.fiber.score + 0.15 * factors.water.score + 0.15 * factors.zoning.score + 0.15 * factors.capital.score)), why: "Power + fiber + water + zoning in one place" },
     { key: "land_bank", fit: clamp(Math.round(0.5 * factors.land.score + 0.5 * factors.activity.score - 0.3 * factors.power.score + 20)), why: "Activity around it but no power yet: option the land, wait for transmission" },

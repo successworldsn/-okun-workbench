@@ -65,7 +65,7 @@ export interface Deal {
 }
 
 export function newDealFromSite(i: SiteIntel, now: Date): Deal {
-  const pv = i.value.powered ?? i.value.raw;
+  const pv = i.value.powered ?? i.value.raw ?? 0;
   const parties: Party[] = i.constellation.slots.filter((s) => s.filledBy).map((s) => ({ id: `${s.role}:${s.filledBy}`, name: s.filledBy!, role: s.role }));
   return {
     id: `D-${i.site.id}-${now.getTime().toString(36)}`,
@@ -319,7 +319,7 @@ export function ceoAlerts(deals: Deal[], queue: (ProposedAction & { ruling: Ruli
       recommendation: "Open the deal thesis",
       siteId: h.site.id,
       temperature: "GREEN",
-      value: (h.value.uplift ?? h.value.raw) * 0.02,
+      value: (h.value.uplift ?? h.value.raw ?? 0) * 0.02 + h.score * 1000,
       choices: ["OPEN"],
     });
   }
@@ -357,7 +357,7 @@ export function runDealTeam(i: SiteIntel, signals: Signal[], capital: CapitalSou
   const mwRead = i.factors.power.findings[0]?.text ?? "MW unknown";
   const evCount = i.badges.VERIFIED + i.badges.REPORTED;
   const reports: AgentReport[] = [];
-  reports.push({ agent: "scout", lines: [`${s.name} (${s.county} County, ${s.acres} acres) surfaced at ${i.score}/100.`, ...i.why.slice(0, 3)] });
+  reports.push({ agent: "scout", lines: [`${s.name} (${s.county} County${s.acres != null ? `, ${s.acres} acres` : ", power node"}) surfaced at ${i.score}/100.`, ...i.why.slice(0, 3)] });
   reports.push({
     agent: "analyst",
     lines: [
@@ -377,7 +377,7 @@ export function runDealTeam(i: SiteIntel, signals: Signal[], capital: CapitalSou
       "Water: provider capacity letter for cooling",
     ],
   });
-  reports.push({ agent: "valuation", lines: [`Raw land ≈ ${fmt(i.value.raw)}${i.value.powered ? ` · powered ≈ ${fmt(i.value.powered)} (uplift ${fmt(i.value.uplift!)})` : ""}`, i.value.basis] });
+  reports.push({ agent: "valuation", lines: [`Raw land ≈ ${i.value.raw != null ? fmt(i.value.raw) : "unknown"}${i.value.powered ? ` · powered ≈ ${fmt(i.value.powered)} (uplift ${fmt(i.value.uplift!)})` : ""}`, i.value.basis] });
   const dev = i.matches.find((m) => m.source.kind === "developer");
   const cap = i.matches.find((m) => m.source.kind !== "developer" && m.source.kind !== "utility");
   reports.push({
@@ -429,7 +429,7 @@ export function ownerLetter(i: SiteIntel): string {
     "",
     "Hello,",
     "",
-    `I research industrial land in ${i.site.state} for companies building power-intensive facilities. Your ${i.site.acres}-acre property came up in that work.`,
+    `I research industrial land in ${i.site.state} for companies building power-intensive facilities. Your${i.site.acres != null ? ` ${i.site.acres}-acre` : ""} property came up in that work.`,
     "If you would consider selling, leasing or optioning it, I'd like to understand what matters to you and share what we're seeing in the market. No obligation, and nothing here is an offer.",
     "",
     "[Your name] · [Your company] · [Your phone]",
@@ -441,7 +441,7 @@ export function siteBrief(i: SiteIntel, to: string): string {
   return [
     `CONFIDENTIAL SITE BRIEF — for ${to} — non-binding, for discussion only`,
     "",
-    `${s.name} · ${s.county} County, ${s.state} · ${s.acres} acres · zoned ${s.zoning.replace("_", " ")}`,
+    `${s.name} · ${s.county} County, ${s.state} · ${s.acres != null ? `${s.acres} acres` : "power node, land not yet identified"} · zoned ${s.zoning.replace("_", " ")}`,
     ...i.why.map((w) => `• ${w}`),
     "",
     `Status of facts: ${i.badges.VERIFIED} government-verified, ${i.badges.REPORTED} reported, ${i.badges.INFERRED} our estimates. MW figures are not utility commitments.`,

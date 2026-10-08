@@ -126,14 +126,15 @@ async function polygonsOver(layerUrl, props, outFields) {
       for (let offset = 0; ; offset += 500) {
         const j = await getJson(`${layerUrl}/query`, {
           where: "1=1", geometry: `${x},${y},${x + step},${y + step}`, geometryType: "esriGeometryEnvelope", inSR: "4326",
-          spatialRel: "esriSpatialRelIntersects", outFields, returnGeometry: "true", outSR: "4326",
+          spatialRel: "esriSpatialRelIntersects", outFields: outFields === "*" ? "*" : `OBJECTID,${outFields}`, returnGeometry: "true", outSR: "4326",
           resultOffset: String(offset), resultRecordCount: "500", geometryPrecision: "6", maxAllowableOffset: "0.00003",
         });
         feats.push(...(j.features ?? []));
         if (!j.exceededTransferLimit && (j.features ?? []).length < 500) break;
       }
       for (const f of feats) {
-        const id = JSON.stringify(f.attributes);
+        const r0 = f.geometry?.rings?.[0]?.[0];
+        const id = `${f.attributes.OBJECTID ?? f.attributes.objectid ?? f.attributes.FID ?? ""}|${JSON.stringify(f.attributes)}|${r0 ? r0.join(",") : ""}`;
         if (seen.has(id)) continue;
         seen.add(id);
         const g = toPoly(f);
@@ -471,10 +472,16 @@ async function main() {
   // 4. Parcels (+ CAMA) for every touched parcel and every swept ZIP
   const idField = L.parcels.idField || "PARCELID";
   const parcels = new Map();
+  // Permits carry the short "low" parcel id (LOWPARCELID); remember it as an alias of the full id.
+  const alias = new Map();
+  const findParcel = (k) => (k ? parcels.get(k) ?? parcels.get(alias.get(k)) : undefined);
   const ingest = (features, cama) => {
     for (const f of features) {
       const key = parcelKey(pick(f.attributes, [...FIELDS.parcelId]));
-      if (!key || parcels.has(key)) continue;
+      if (!key) continue;
+      const low = parcelKey(pick(f.attributes, ["LOWPARCELID"]));
+      if (low && low !== key) alias.set(low, key);
+      if (parcels.has(key)) continue;
       parcels.set(key, mapParcel(f.attributes, f.geometry, cama.get(key), pulledAt));
     }
   };
@@ -495,12 +502,14 @@ async function main() {
   const touchedList = [...touched].slice(0, opt.maxParcels);
   for (let i = 0; i < touchedList.length; i += 60) {
     const chunk = touchedList.slice(i, i + 60);
-    const { features } = await query(L.parcels.url, `${idField} IN (${sqlList(chunk.slice(0, 60))})`, { geometry: true });
+    const list = sqlList(chunk.slice(0, 60));
+    const lowField = (metaCache.get(L.parcels.url)?.fields ?? []).some((f) => f.name === "LOWPARCELID") || !metaCache.has(L.parcels.url) ? " OR LOWPARCELID IN (" + list + ")" : "";
+    const { features } = await query(L.parcels.url, `${idField} IN (${list})${lowField}`, { geometry: true });
     features.forEach((f) => seeRaw(pick(f.attributes, [...FIELDS.parcelId])));
     ingest(features, await camaFor(chunk));
   }
-  const unmatched = touchedList.filter((k) => !parcels.has(k));
-  console.log(`  touched parcels: ${touchedList.length}, found in parcel layer: ${touchedList.length - unmatched.length}; unmatched samples: ${unmatched.slice(0, 6).map((k) => JSON.stringify([...(rawIds.get(k) ?? [k])][0])).join(" ")}`);
+  const unmatched = touchedList.filter((k) => !findParcel(k));
+  console.log(`  touched parcels: ${touchedList.length}, found in parcel layer: ${touchedList.length - unmatched.length}; unmatched id samples: ${unmatched.slice(0, 6).map((k) => JSON.stringify([...(rawIds.get(k) ?? [k])][0])).join(" ")}`);
   // ZIP sweeps: the city layer's ZIP field is empty, so sweep by the Census ZIP boundary instead.
   for (const zip of opt.zips) {
     const zipField = L.parcels.zipField || "SITEZIP";
@@ -560,7 +569,7 @@ async function main() {
   // 5. Join everything onto the parcel
   for (const p of parcels.values()) byAddr.set(normAddr(p.address), p);
   for (const [key, b] of byParcel) {
-    const p = parcels.get(key);
+    const p = findParcel(key);
     if (!p) continue;
     p.permits.push(...b.permits);
     p.codeCases.push(...b.cases);
@@ -576,7 +585,7 @@ async function main() {
   for (const [kind, rows] of Object.entries(lists)) {
     for (const r of rows) {
       const pid = pick(r, [...FIELDS.parcelId]);
-      const p = (pid && parcels.get(parcelKey(pid))) || byAddr.get(normAddr(pick(r, [...FIELDS.address])));
+      const p = (pid && findParcel(parcelKey(pid))) || byAddr.get(normAddr(pick(r, [...FIELDS.address])));
       if (p) attachListRow(p, kind, r, pulledAt);
     }
   }
@@ -588,7 +597,7 @@ async function main() {
     const rows = (await readList(opt.deeds)).map(mapDeedRow);
     const groups = new Map();
     for (const r of rows) {
-      const p = (r.parcel && parcels.get(parcelKey(r.parcel))) || (r.address && byAddr.get(normAddr(r.address)));
+      const p = (r.parcel && findParcel(parcelKey(r.parcel))) || (r.address && byAddr.get(normAddr(r.address)));
       if (p) groups.set(p, [...(groups.get(p) ?? []), r]);
     }
     for (const [p, rs] of groups) attachDeeds(p, rs, pulledAt);
@@ -636,7 +645,8 @@ async function main() {
       const key = process.env.CENSUS_API_KEY ? `&key=${process.env.CENSUS_API_KEY}` : "";
       const base = process.env.CENSUS_API_BASE || "https://api.census.gov";
       const res = await fetch(`${base}/data/${year}/acs/acs5?get=B25064_001E,B01003_001E,B19013_001E&for=zip%20code%20tabulation%20area:${zips.join(",")}${key}`);
-      if (!res.ok) throw new Error(`Census ${year}: HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`Census ${year}: HTTP ${res.status} ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`);
+      if (!/json/.test(res.headers.get("content-type") ?? "")) throw new Error(`Census ${year}: not JSON (${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}) — set CENSUS_API_KEY`);
       return parseAcs(await res.json());
     };
     try {
@@ -665,9 +675,10 @@ async function main() {
 
   console.log(`\nWrote ${opt.out}: ${props.length} properties, ${Object.keys(market).length} ZIP market contexts, ${addrMatched} rows matched by address.`);
   for (const r of report) console.log(`  ${r.id.padEnd(20)} ${String(r.records).padStart(7)} records${r.minDate ? `  ${r.minDate.slice(0, 10)} → ${r.maxDate.slice(0, 10)}` : ""}${r.unmapped?.length ? `  (unmapped: ${r.unmapped.join(", ")})` : ""}`);
-  for (const p of props.slice(0, 3)) console.log(`  sample property: ${JSON.stringify({ id: p.id, address: p.address, zip: p.zip, sqft: p.sqft, yearBuilt: p.yearBuilt, beds: p.beds, zoning: p.zoning, lotSqft: p.lotSqft, homestead: p.homesteadExemption, mailState: p.ownerMailingState, value: p.fairMarketValue, permits: p.permits?.length, cases: p.codeCases?.length })}`);
+  const inCi = !!process.env.CI; // public run logs: no addresses or owners
+  for (const p of props.slice(0, 3)) console.log(`  sample property: ${JSON.stringify({ id: inCi ? "•••" : p.id, address: inCi ? "•••" : p.address, zip: p.zip, sqft: p.sqft, yearBuilt: p.yearBuilt, beds: p.beds, zoning: p.zoning, lotSqft: p.lotSqft, homestead: p.homesteadExemption, mailState: p.ownerMailingState, value: p.fairMarketValue, permits: p.permits?.length, cases: p.codeCases?.length })}`);
   console.log("\nTop 15:");
-  for (const i of intel.slice(0, 15)) console.log(`  ${String(i.score).padStart(3)}  ${String(i.confidence).padStart(2)}%  ${i.p.address.padEnd(32)} ${i.primarySignal}`);
+  for (const i of intel.slice(0, 15)) console.log(`  ${String(i.score).padStart(3)}  ${String(i.confidence).padStart(2)}%  ${(inCi ? `ZIP ${i.p.zip ?? "?"}` : i.p.address).padEnd(32)} ${i.primarySignal}`);
 }
 
 main().catch((e) => {

@@ -37,6 +37,8 @@ export interface IntelData {
  * RE_INTEL_URL (e.g. a Supabase Storage object) wins, then data/atlanta-intel.json
  * from `node tools/atlanta-intel/atlanta-feed.mjs`, then the EXAMPLE set.
  */
+let privateCache: { at: number; data: IntelData } | null = null;
+
 export async function loadIntelData(now: Date): Promise<IntelData> {
   const fromJson = (j: { generatedAt: string; sources?: FeedSource[]; market?: Record<string, MarketContext>; properties?: PropertyRecord[] }): IntelData => ({
     example: false,
@@ -46,6 +48,20 @@ export async function loadIntelData(now: Date): Promise<IntelData> {
     properties: j.properties ?? [],
   });
   let note: string | undefined;
+  // 1. Private Supabase Storage (written by .github/workflows/atlanta-feed.yml), cached per server instance.
+  if (!DEMO_MODE) {
+    const bucket = process.env.RE_INTEL_BUCKET || "godseye-private";
+    if (privateCache && now.getTime() - privateCache.at < 15 * 60_000) return privateCache.data;
+    try {
+      const { data, error } = await db().storage.from(bucket).download("atlanta-intel.json");
+      if (error) throw error;
+      const parsed = fromJson(JSON.parse(await data.text()));
+      privateCache = { at: now.getTime(), data: parsed };
+      return parsed;
+    } catch (e) {
+      note = `Private feed not readable yet (${(e as Error).message || "not found"}): the scheduled feed writes it once the repo has the Supabase secrets.`;
+    }
+  }
   const url = process.env.RE_INTEL_URL;
   if (url) {
     try {

@@ -1,0 +1,41 @@
+# Capital Desk feed: Georgia power plants (EIA), ≥230 kV substations and
+# transmission (HIFLD-style layers) → data/public/ga-infra.json, committed to
+# the branch it ran on. Public infrastructure data only, no people.
+# Runs on a change to tools/ci-feed/run-request.json (claude/* branches),
+# weekly from the default branch, or by hand once on main.
+name: GA infrastructure feed
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["tools/ci-feed/run-request.json"]
+  schedule:
+    - cron: "41 8 * * 1" # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ga-infra-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Pull Georgia infrastructure
+        run: node tools/ci-feed/ga-infra.mjs --state GA --out data/public/ga-infra.json
+      - name: Commit if changed
+        run: |
+          git config user.name "godseye-feed[bot]"
+          git config user.email "godseye-feed@users.noreply.github.com"
+          git add -f data/public/ga-infra.json
+          if git diff --cached --quiet; then echo "No change."; exit 0; fi
+          git commit -m "GA infrastructure feed: $(date -u +%Y-%m-%d)"
+          git push

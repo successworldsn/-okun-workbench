@@ -391,7 +391,7 @@ function Dossier({ i, tab, setTab, now, team, queue, onRunTeam, onStartDeal, onQ
         </div>
         <h2 className="mt-1 font-display text-lg font-bold leading-tight">{s.name}</h2>
         <div className="text-[11px] text-ash">
-          {s.county} County, {s.state} · {s.acres} acres · zoned {s.zoning.replace("_", " ")} · {s.existingUse.replace("_", " ")}
+          {s.county} County, {s.state} · {s.acres != null ? `${s.acres} acres` : "power node"} · zoned {s.zoning.replace("_", " ")} · {s.existingUse.replace("_", " ")}
         </div>
         <div className="mt-2 flex items-end gap-4">
           <div>
@@ -530,7 +530,7 @@ function Dossier({ i, tab, setTab, now, team, queue, onRunTeam, onStartDeal, onQ
               <tbody>
                 <tr className="border-b border-elevated/60">
                   <td className="py-1 text-muted">Raw land value</td>
-                  <td className="text-right font-mono">{fmtUsd(i.value.raw)}</td>
+                  <td className="text-right font-mono">{i.value.raw != null ? fmtUsd(i.value.raw) : "—"}</td>
                 </tr>
                 <tr className="border-b border-elevated/60">
                   <td className="py-1 text-muted">Powered-land value</td>

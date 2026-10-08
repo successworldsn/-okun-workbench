@@ -12,7 +12,9 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 
 const req = existsSync("tools/atlanta-intel/run-request.json") ? JSON.parse(readFileSync("tools/atlanta-intel/run-request.json", "utf8")) : {};
-const mode = process.env.INPUT_MODE || req.mode || "discover";
+// Scheduled runs pull the standing sweep; pushes and hand runs use the request file.
+const scheduled = process.env.GITHUB_EVENT_NAME === "schedule";
+const mode = process.env.INPUT_MODE || (scheduled ? "feed" : req.mode) || "discover";
 const zips = (process.env.INPUT_ZIPS || (req.zips ?? []).join(" ")).split(/[\s,]+/).filter((z) => /^\d{5}$/.test(z));
 const since = Number(process.env.INPUT_SINCE || req.since || 730);
 const counties = (req.counties ?? []).filter((c) => /^[a-z]+:[\d,]+$/.test(c));

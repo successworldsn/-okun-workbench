@@ -2,15 +2,19 @@
 # city / county / FEMA / Census / MARTA servers are reachable. Triggered by a
 # change to tools/atlanta-intel/run-request.json on a claude/* branch, or by
 # hand (Actions → Atlanta feed → Run workflow) once this file is on main.
-# Output (feed JSON with owner names from public records, the Deal
-# Intelligence CSV, and the browser preview) is a private run artifact kept 7
-# days — it is never committed.
+# The output holds owner names from public records, so it is NEVER committed
+# or uploaded as a run artifact (artifacts on a public repo are downloadable):
+# it goes only to a private Supabase Storage bucket, and only when the repo
+# secrets SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY exist. The public run log
+# shows counts and scores, never addresses or owners.
 name: Atlanta feed
 
 on:
   push:
     branches: ["claude/**"]
     paths: ["tools/atlanta-intel/run-request.json"]
+  schedule:
+    - cron: "17 9 * * *" # daily refresh (runs from the default branch)
   workflow_dispatch:
     inputs:
       mode:
@@ -49,14 +53,12 @@ jobs:
           INPUT_SINCE: ${{ github.event.inputs.since }}
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
         run: node tools/atlanta-intel/ci.mjs 2>&1 | tee run.log
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: godseye-feed
-          retention-days: 7
-          if-no-files-found: ignore
-          path: |
-            run.log
-            data/atlanta-intel.json
-            data/deal-intel-import.csv
-            dist/godseye-preview.html
+      - name: Store privately
+        if: success()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -f data/atlanta-intel.json ]; then
+            node tools/atlanta-intel/upload-private.mjs data/atlanta-intel.json data/deal-intel-import.csv dist/godseye-preview.html
+          fi
