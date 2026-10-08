@@ -19,6 +19,7 @@ export type SourceId =
   | "fulton_cama"
   | "code_history"
   | "building_complaints"
+  | "atl311"
   | "permits"
   | "tax_delinquent"
   | "foreclosure_notice"
@@ -27,6 +28,8 @@ export type SourceId =
   | "zoning"
   | "flood"
   | "opportunity_zone"
+  | "transit"
+  | "county_parcels"
   | "market"
   | "manual"
   | "rule";
@@ -45,14 +48,17 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
   fulton_cama: { label: "Fulton County CAMA (assessor)", kind: "government", maxAgeDays: 400 },
   code_history: { label: "Atlanta code enforcement 2021–2023", kind: "government", maxAgeDays: 540, historyOnly: true },
   building_complaints: { label: "Atlanta building complaints (permit system)", kind: "government", maxAgeDays: 365 },
+  atl311: { label: "ATL311 service requests", kind: "government", maxAgeDays: 365 },
   permits: { label: "Atlanta building permits", kind: "government", maxAgeDays: 3650 },
   tax_delinquent: { label: "Fulton Tax Commissioner delinquency list", kind: "government", maxAgeDays: 120 },
   foreclosure_notice: { label: "County legal-organ foreclosure notice", kind: "government", maxAgeDays: 90 },
   probate: { label: "Fulton Probate Court estate filing", kind: "government", maxAgeDays: 730 },
-  deeds: { label: "County deed / transfer record", kind: "government", maxAgeDays: 36500 },
+  deeds: { label: "Clerk deed + security-deed index", kind: "government", maxAgeDays: 36500 },
   zoning: { label: "City of Atlanta zoning", kind: "government", maxAgeDays: 730 },
   flood: { label: "FEMA flood hazard layer", kind: "government", maxAgeDays: 1825 },
   opportunity_zone: { label: "Federal Opportunity Zone tracts", kind: "government", maxAgeDays: 3650 },
+  transit: { label: "MARTA GTFS rail stations", kind: "government", maxAgeDays: 730 },
+  county_parcels: { label: "Metro county assessor parcels", kind: "government", maxAgeDays: 400 },
   market: { label: "Derived from public permits + assessor records", kind: "derived", maxAgeDays: 120 },
   manual: { label: "Entered by you", kind: "manual", maxAgeDays: 180 },
   rule: { label: "Engine rule (inference)", kind: "derived", maxAgeDays: 36500 },
@@ -99,7 +105,7 @@ export interface Permit {
 
 export interface CodeCase {
   id: string;
-  source: "code_history" | "building_complaints";
+  source: "code_history" | "building_complaints" | "atl311";
   openedAt: string | null;
   status?: string;
   type?: string;
@@ -113,14 +119,24 @@ export interface Transfer {
   date: string;
   price?: number | null;
   deedType?: string;
+  grantor?: string;
   grantee?: string;
+  ref?: string;
 }
 
 export interface Mortgage {
   date: string;
   amount: number;
   lender?: string;
+  ref?: string;
+  /** Date a cancellation / satisfaction was recorded against it. */
+  satisfiedAt?: string | null;
 }
+
+/** Deed instruments that mean the owner of record died or the house went through an estate. */
+export const ESTATE_DEED = /\b(EXECUT(?:OR|RIX)'?S?|ADMINISTRAT(?:OR|RIX)'?S?|ESTATE|PERSONAL REP\w*|EXD|ADMD|HEIRS?)\b/i;
+export const FORECLOSURE_DEED = /\b(DEED UNDER POWER|DUP|FORECLOSURE DEED|SHERIFF)\b/i;
+export const openMortgages = (p: { mortgages?: Mortgage[] }) => (p.mortgages ?? []).filter((m) => !m.satisfiedAt);
 
 export interface PropertyRecord {
   id: string; // parcel id
@@ -150,6 +166,7 @@ export interface PropertyRecord {
   cornerLot?: boolean;
   adjacentSameOwner?: number;
   transitMi?: number | null;
+  transitName?: string | null;
 
   fairMarketValue?: number | null; // county appraised (assessed ÷ 0.40 in GA)
   landValue?: number | null;
@@ -160,6 +177,8 @@ export interface PropertyRecord {
   lastSalePrice?: number | null;
   transfers?: Transfer[];
   mortgages?: Mortgage[];
+  /** When the deed + security-deed index was searched for this parcel (null = never). */
+  deedsCheckedAt?: string | null;
 
   permits?: Permit[];
   codeCases?: CodeCase[];
@@ -278,8 +297,8 @@ export function ownershipYears(p: PropertyRecord, now: Date): number | null {
   return y == null ? null : Math.floor(y);
 }
 
-function currentCodeCases(p: PropertyRecord, now: Date) {
-  return (p.codeCases ?? []).filter((c) => c.source === "building_complaints" && c.openedAt && daysBetween(new Date(c.openedAt), now) <= 548);
+function currentCodeCases(p: PropertyRecord, now: Date, source: CodeCase["source"] = "building_complaints") {
+  return (p.codeCases ?? []).filter((c) => c.source === source && c.openedAt && daysBetween(new Date(c.openedAt), now) <= 548);
 }
 
 export function distressEngine(p: PropertyRecord, now: Date): EngineResult {
@@ -309,6 +328,13 @@ export function distressEngine(p: PropertyRecord, now: Date): EngineResult {
       text: `${current.length} building complaint${current.length > 1 ? "s" : ""} in the last 18 months`,
       points: Math.min(30, 15 * current.length),
       evidence: current.map((c) => ({ source: "building_complaints" as const, detail: `${c.type || "Building complaint"}${c.status ? ` · ${c.status}` : ""}`, observedAt: c.openedAt, ref: c.id })),
+    });
+  const sr = currentCodeCases(p, now, "atl311");
+  if (sr.length)
+    f.push({
+      text: `${sr.length} ATL311 request${sr.length > 1 ? "s" : ""} on the address in the last 18 months`,
+      points: Math.min(20, 10 * sr.length),
+      evidence: sr.map((c) => ({ source: "atl311" as const, detail: `${c.type || "Service request"}${c.status ? ` · ${c.status}` : ""}`, observedAt: c.openedAt, ref: c.id })),
     });
   const hist = (p.codeCases ?? []).filter((c) => c.source === "code_history");
   if (hist.length)
@@ -371,6 +397,12 @@ export function motivationEngine(p: PropertyRecord, now: Date): EngineResult {
       points: 30,
       evidence: [{ source: "probate", detail: `Estate filing${p.probate.caseNo ? ` ${p.probate.caseNo}` : ""}`, observedAt: p.probate.filedAt }],
     });
+  else if ((p.transfers ?? []).some((t) => ESTATE_DEED.test(t.deedType ?? "")))
+    f.push({
+      text: "Last transfer was by estate / executor's deed",
+      points: 15,
+      evidence: (p.transfers ?? []).filter((t) => ESTATE_DEED.test(t.deedType ?? "")).map((t) => ({ source: "deeds" as const, detail: `${t.deedType}${t.grantee ? ` to ${t.grantee}` : ""}`, observedAt: t.date, ref: t.ref })),
+    });
   else if (/\b(ESTATE|EST OF|HEIRS?)\b/i.test(p.owner ?? ""))
     f.push({ text: "Owner of record reads as an estate / heirs", points: 20, evidence: [{ source: "coa_parcels", detail: `Owner: ${p.owner}`, observedAt: prov(p, "owner", "coa_parcels").asOf }] });
 
@@ -425,14 +457,20 @@ export function estimateValue(p: PropertyRecord, m: MarketContext | undefined, n
 
   let debt: number | null = null;
   let debtBasis = "Debt unknown: no mortgage records pulled";
-  if (p.mortgages?.length) {
+  const open = openMortgages(p);
+  if (p.deedsCheckedAt && !open.length) {
+    debt = 0;
+    debtBasis = (p.mortgages ?? []).length
+      ? `Every recorded security deed has a cancellation on record (index searched ${p.deedsCheckedAt.slice(0, 10)})`
+      : `No security deed recorded since the last transfer (index searched ${p.deedsCheckedAt.slice(0, 10)})`;
+  } else if (open.length) {
     debt = Math.round(
-      p.mortgages.reduce((s, x) => {
+      open.reduce((s, x) => {
         const months = Math.max(0, Math.floor(((now.getTime() - new Date(x.date).getTime()) / DAY) / 30.44));
         return s + remainingBalance(x.amount, SCREEN.assumedRate, SCREEN.loanTermYears, months);
       }, 0),
     );
-    debtBasis = `Recorded security deeds amortized at ${(SCREEN.assumedRate * 100).toFixed(1)}% / ${SCREEN.loanTermYears} yr (estimate; payoff unknown)`;
+    debtBasis = `${open.length} open security deed${open.length > 1 ? "s" : ""} amortized at ${(SCREEN.assumedRate * 100).toFixed(1)}% / ${SCREEN.loanTermYears} yr (estimate; payoff unknown)`;
   } else if (has(p.lastSalePrice) && p.lastSaleDate) {
     const months = Math.floor(((now.getTime() - new Date(p.lastSaleDate).getTime()) / DAY) / 30.44);
     debt = Math.round(remainingBalance(p.lastSalePrice * SCREEN.assumedLtv, SCREEN.assumedRate, SCREEN.loanTermYears, months));
@@ -453,14 +491,14 @@ export function equityEngine(p: PropertyRecord, v: ValueEstimate, now: Date): En
   const unknowns: string[] = [];
   if (v.current == null) unknowns.push("Current value");
   if (v.equity != null && v.equityPct != null) {
-    const inferredDebt = !p.mortgages?.length;
+    const inferredDebt = !p.deedsCheckedAt && !openMortgages(p).length;
     const ev: Evidence[] = [
       { source: prov(p, "fairMarketValue", "fulton_cama").source, detail: `Value: ${v.currentBasis}`, observedAt: prov(p, "fairMarketValue", "fulton_cama").asOf },
-      { source: p.mortgages?.length ? "deeds" : "rule", detail: v.debtBasis, observedAt: null, inferred: inferredDebt },
+      { source: inferredDebt ? "rule" : "deeds", detail: v.debtBasis, observedAt: p.deedsCheckedAt ?? null, inferred: inferredDebt },
     ];
     const pts = v.equityPct >= 0.8 ? 55 : v.equityPct >= 0.5 ? 40 : v.equityPct >= 0.3 ? 20 : 0;
     if (pts) f.push({ text: `Estimated equity ${money(v.equity)} (${Math.round(v.equityPct * 100)}%)`, points: pts, evidence: ev });
-    if (inferredDebt) unknowns.push("Recorded mortgages (deed records)");
+    if (inferredDebt) unknowns.push("Recorded mortgages (search the deed index)");
   } else unknowns.push("Debt: pull security deeds to estimate equity");
   const yrs = ownershipYears(p, now);
   if (yrs != null && yrs >= 20)
@@ -507,8 +545,11 @@ export interface DevelopmentRead {
   splitCandidate: boolean;
 }
 
+/** The ordinance table is the City of Atlanta's; other jurisdictions reuse codes like R-4 with different rules. */
+const atlZoning = (p: PropertyRecord) => (p.zoning && (!p.city || p.city.toUpperCase() === "ATLANTA") ? ATL_ZONING[p.zoning.toUpperCase()] : undefined);
+
 export function developmentRead(p: PropertyRecord): DevelopmentRead {
-  const z = p.zoning ? ATL_ZONING[p.zoning.toUpperCase()] : undefined;
+  const z = atlZoning(p);
   const existing = has(p.existingUnits) ? p.existingUnits : 1;
   let allowed = has(p.zoningMaxUnits) ? p.zoningMaxUnits : null;
   let split = false;
@@ -530,7 +571,7 @@ export function developmentEngine(p: PropertyRecord, now: Date): EngineResult {
   if (d.extraUnits > 0) f.push({ text: `Zoning screen allows ${d.extraUnits} more unit${d.extraUnits > 1 ? "s" : ""} than exist`, points: Math.min(40, 20 * d.extraUnits), evidence: [zEv] });
   if (d.splitCandidate) f.push({ text: "Lot is at least 2× the district minimum: lot-split candidate", points: 15, evidence: [zEv] });
   if (d.aduCandidate) f.push({ text: "Lot size fits an ADU screen", points: 10, evidence: [{ ...zEv, detail: "Single-family district, lot ≥ 6,000 sq ft (verify ADU rules)", inferred: true }] });
-  const zz = p.zoning ? ATL_ZONING[p.zoning.toUpperCase()] : undefined;
+  const zz = atlZoning(p);
   if (zz?.multifamily && (p.existingUnits ?? 1) <= 2)
     f.push({ text: `Multifamily district (${p.zoning}) holding ${p.existingUnits ?? 1} unit(s)`, points: 30, evidence: [{ source: "zoning", detail: `Zoned ${p.zoning}`, observedAt: prov(p, "zoning", "zoning").asOf }] });
   if (has(p.landValue) && has(p.fairMarketValue) && p.fairMarketValue > 0 && p.landValue / p.fairMarketValue >= 0.6)
@@ -538,8 +579,9 @@ export function developmentEngine(p: PropertyRecord, now: Date): EngineResult {
   if (p.cornerLot) f.push({ text: "Corner lot", points: 5, evidence: [{ source: "coa_parcels", detail: "Two street frontages", observedAt: null }] });
   if (has(p.adjacentSameOwner) && p.adjacentSameOwner > 0)
     f.push({ text: `Owner holds ${p.adjacentSameOwner} adjacent parcel${p.adjacentSameOwner > 1 ? "s" : ""}: assemblage`, points: 15, evidence: [{ source: "coa_parcels", detail: "Same owner name on touching parcels", observedAt: null }] });
-  if (has(p.transitMi) && p.transitMi <= 0.5) f.push({ text: `${p.transitMi.toFixed(2)} mi to MARTA rail / BeltLine`, points: 10, evidence: [{ source: "rule", detail: "Straight-line distance", observedAt: null, inferred: true }] });
-  if (p.opportunityZone) f.push({ text: "Inside a federal Opportunity Zone", points: 5, evidence: [{ source: "opportunity_zone", detail: "Census tract designated", observedAt: null }] });
+  if (has(p.transitMi) && p.transitMi <= 0.5)
+    f.push({ text: `${p.transitMi.toFixed(2)} mi to ${p.transitName ?? "MARTA rail"}`, points: 10, evidence: [{ source: "transit", detail: `Straight-line distance to ${p.transitName ?? "nearest rail station"}`, observedAt: null }] });
+  if (p.opportunityZone) f.push({ text: "Inside a federal Opportunity Zone", points: 5, evidence: [{ source: "opportunity_zone", detail: "Census tract designated", observedAt: prov(p, "opportunityZone", "opportunity_zone").asOf }] });
   const nc = (p.permits ?? []).filter((x) => x.category === "new_construction" && x.issuedAt && daysBetween(new Date(x.issuedAt), now) <= 730);
   if (nc.length) f.push({ text: "New-construction permit on this parcel in 2 years: someone is already building", points: -20, evidence: nc.map((x) => ({ source: "permits" as const, detail: x.type, observedAt: x.issuedAt, ref: x.id })) });
   if (f.length) unknowns.push("Zoning office confirmation of units / setbacks");
@@ -565,13 +607,15 @@ export function marketEngine(m: MarketContext | undefined): EngineResult {
 export function riskEngine(p: PropertyRecord, v: ValueEstimate, now: Date): EngineResult {
   const f: Finding[] = [];
   if (p.floodZone && /^(A|AE|AH|AO|V|VE)/i.test(p.floodZone))
-    f.push({ text: `FEMA flood zone ${p.floodZone}: insurance and lender cost`, points: 35, evidence: [{ source: "flood", detail: `Zone ${p.floodZone}`, observedAt: null }] });
+    f.push({ text: `FEMA flood zone ${p.floodZone}: insurance and lender cost`, points: 35, evidence: [{ source: "flood", detail: `Zone ${p.floodZone}`, observedAt: prov(p, "floodZone", "flood").asOf }] });
   if ((p.codeCases ?? []).some((c) => c.structural)) f.push({ text: "Structural flag on a code case", points: 25, evidence: (p.codeCases ?? []).filter((c) => c.structural).map((c) => ({ source: c.source, detail: "Structural", observedAt: c.openedAt, ref: c.id })) });
   if (p.foreclosure) {
     const days = daysBetween(now, new Date(p.foreclosure.saleDate));
     if (days >= 0 && days <= 14) f.push({ text: `Only ${days} days to the foreclosure sale`, points: 15, evidence: [{ source: "foreclosure_notice", detail: `Sale ${p.foreclosure.saleDate.slice(0, 10)}`, observedAt: p.foreclosure.noticeDate ?? null }] });
   }
   if (v.equityPct != null && v.equityPct < 0.1) f.push({ text: "Little or no equity: owner may not be able to sell at a discount", points: 25, evidence: [{ source: "rule", detail: v.debtBasis, observedAt: null, inferred: true }] });
+  const fd = (p.transfers ?? []).find((t) => FORECLOSURE_DEED.test(t.deedType ?? ""));
+  if (fd) f.push({ text: "Went through foreclosure before (deed under power on record)", points: 5, evidence: [{ source: "deeds", detail: fd.deedType ?? "", observedAt: fd.date, ref: fd.ref }] });
   if (has(p.yearBuilt) && p.yearBuilt < 1978) f.push({ text: `Built ${p.yearBuilt}: lead-paint disclosure and possible asbestos`, points: 5, evidence: [{ source: prov(p, "yearBuilt", "fulton_cama").source, detail: `Year built ${p.yearBuilt}`, observedAt: null }] });
   return engine("risk", f, []);
 }
@@ -777,7 +821,7 @@ export function analyze(p: PropertyRecord, market: Record<string, MarketContext>
   if (engines.development.score >= 30) missions.push("develop");
   if (isAbsentee(p)) missions.push("absentee");
   // "New" means a new event on the parcel (complaint, permit, tax list, notice, filing), not a refreshed attribute.
-  const EVENT_SOURCES: SourceId[] = ["building_complaints", "permits", "tax_delinquent", "foreclosure_notice", "probate"];
+  const EVENT_SOURCES: SourceId[] = ["building_complaints", "atl311", "permits", "tax_delinquent", "foreclosure_notice", "probate", "deeds"];
   const parcelEv = [engines.distress, engines.motivation, engines.development].flatMap((e) => e.findings.flatMap((f) => f.evidence));
   const dates = parcelEv.filter((e) => !e.inferred && e.observedAt && EVENT_SOURCES.includes(e.source)).map((e) => e.observedAt!).sort();
   const newestSignalAt = dates.length ? dates[dates.length - 1] : null;
@@ -801,7 +845,7 @@ export function analyze(p: PropertyRecord, market: Record<string, MarketContext>
           ? "DEVELOPMENT"
           : engines.equity.score >= 55
             ? "HIGH EQUITY"
-            : currentCodeCases(p, now).length
+            : currentCodeCases(p, now).length || currentCodeCases(p, now, "atl311").length
               ? "CODE COMPLAINT"
               : isAbsentee(p)
                 ? "ABSENTEE"

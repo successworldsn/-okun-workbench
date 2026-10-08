@@ -234,7 +234,7 @@ export function DealDesk({
 
   // ─── Left rail: missions + queue ───
   const rail = (
-    <aside className="flex min-h-0 flex-col border-r border-cyan/10 bg-[#050912]/90 lg:w-[260px]">
+    <aside className="flex min-h-0 w-full flex-col border-r border-cyan/10 bg-[#050912]/90 lg:w-[260px]">
       <div className="border-b border-cyan/10 p-2">
         <div className="mb-1 px-1 font-mono text-[10px] tracking-[0.25em] text-muted">MISSIONS</div>
         <div className="grid grid-cols-3 gap-1 lg:grid-cols-2">
@@ -329,7 +329,7 @@ export function DealDesk({
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="order-2 max-h-[38vh] lg:order-1 lg:max-h-none">{rail}</div>
+        <div className="order-2 flex max-h-[38vh] min-h-0 lg:order-1 lg:max-h-none">{rail}</div>
         <main className="relative order-1 h-[42vh] min-w-0 flex-1 lg:order-2 lg:h-auto">
           <GodsEyeMap points={points} selectedId={selectedId} onSelect={select} basemap={basemap} terrain={terrain} />
           <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(2,4,10,0.95)]" />
@@ -413,6 +413,8 @@ function Dossier(props: {
   onTouch: (k: ActivityKind, o: Outcome, opts?: { stage?: Stage; amount?: number | null; advance?: boolean }) => void;
 }) {
   const { i, state, action, tab, setTab, now } = props;
+  const [closing, setClosing] = useState(false);
+  const [closeAmt, setCloseAmt] = useState("");
   const p = i.p;
   const pr = priority(i.score);
   const engines = (["distress", "motivation", "equity", "valueGap", "development", "market", "risk"] as const).map((k) => i.engines[k]);
@@ -682,11 +684,13 @@ function Dossier(props: {
               <div className="mt-2 flex items-center gap-2 text-[11px]">
                 <span className="text-muted">Stage</span>
                 <select
-                  value={state?.stage ?? "DISCOVERED"}
+                  id="ge-stage"
+                  value={closing ? "CLOSED" : state?.stage ?? "DISCOVERED"}
                   onChange={(e) => {
                     const st = e.target.value as Stage;
-                    const amt = st === "CLOSED" ? Number(prompt("Closed amount (assignment fee / profit), $", "") || 0) : null;
-                    props.onTouch("stage", null, { stage: st, amount: amt, advance: false });
+                    if (st === "CLOSED") return setClosing(true);
+                    setClosing(false);
+                    props.onTouch("stage", null, { stage: st, advance: false });
                   }}
                   className="flex-1 rounded border border-elevated bg-[#02040A] px-2 py-1 font-mono text-[11px] text-bone"
                 >
@@ -695,6 +699,20 @@ function Dossier(props: {
                   ))}
                 </select>
               </div>
+              {closing && (
+                <form
+                  className="mt-1 flex items-center gap-2 text-[11px]"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setClosing(false);
+                    props.onTouch("stage", null, { stage: "CLOSED", amount: Number(closeAmt.replace(/[$,\s]/g, "")) || 0, advance: false });
+                  }}
+                >
+                  <label htmlFor="ge-close-amt" className="text-muted">Closed for $</label>
+                  <input id="ge-close-amt" autoFocus inputMode="decimal" value={closeAmt} onChange={(e) => setCloseAmt(e.target.value)} placeholder="assignment fee / profit" className="min-w-0 flex-1 rounded border border-elevated bg-[#02040A] px-2 py-1 font-mono text-bone" />
+                  <button className="rounded bg-gold/20 px-2 py-1 font-mono text-[10px] tracking-wider text-gold">LOG CLOSE</button>
+                </form>
+              )}
               {state?.nextFollowUp && <div className="mt-1 font-mono text-[10px] text-gold">FOLLOW-UP SCHEDULED {day(state.nextFollowUp)}</div>}
               <ContactLog acts={props.acts} />
             </>
@@ -832,14 +850,14 @@ function MoneyView({ stats }: { stats: ReturnType<typeof moneyStats> }) {
 
 function SourcesView({ meta, now, shown, total }: { meta: { example: boolean; generatedAt: string; sources: FeedSource[] }; now: Date; shown: number; total: number }) {
   const ROADMAP: [string, string][] = [
-    ["Tax delinquency (current)", "Records request to the Fulton Tax Commissioner → --tax list.csv"],
-    ["Foreclosure notices", "Weekly legal-organ notices (sale = first Tuesday) → --foreclosure list.csv"],
-    ["Probate estates", "Fulton Probate Court filings → --probate list.csv"],
-    ["Deeds + security deeds", "GSCCCA real-estate index: transfers and mortgages for the equity engine"],
-    ["DeKalb, Cobb, Gwinnett, Clayton", "Each county assessor's open parcel layer (same mapper)"],
-    ["FEMA flood zones", "National Flood Hazard Layer (risk engine)"],
-    ["Opportunity Zones, MARTA, BeltLine", "Federal tract list + transit stops (development engine)"],
-    ["311 / ATL311", "Current service requests: a second, independent distress signal"],
+    ["Permits + Building Complaints", "Live layer · renovation, new construction, demolition, current complaints"],
+    ["ATL311 service requests", "Layer or CSV export (--atl311) · condition requests only, a 2nd independent distress signal"],
+    ["Deeds + security deeds", "Clerk's index export, GSCCCA or records request (--deeds) · transfers, open loans, cancellations → real equity"],
+    ["FEMA flood zones", "NFHL layer 28, point-in-polygon on every parcel (risk engine)"],
+    ["Opportunity Zones", "Federal tract polygons (development engine) · set the layer URL via --discover"],
+    ["MARTA rail stations", "MARTA GTFS stops.txt → distance to the nearest station"],
+    ["DeKalb, Cobb, Gwinnett, Clayton", "Each county's parcel layer, swept by ZIP (--county dekalb:30032)"],
+    ["Tax delinquency, foreclosure notices, probate", "Records-request lists (--tax, --foreclosure, --probate)"],
   ];
   return (
     <div>
@@ -882,7 +900,7 @@ function SourcesView({ meta, now, shown, total }: { meta: { example: boolean; ge
           )}
         </tbody>
       </table>
-      <div className="mt-5 font-mono text-[9px] tracking-[0.25em] text-muted">NEXT FREE SOURCES TO WIRE</div>
+      <div className="mt-5 font-mono text-[9px] tracking-[0.25em] text-muted">FREE SOURCES WIRED INTO THE FEED</div>
       <ul className="mt-1 space-y-1 text-[11px]">
         {ROADMAP.map(([k, v]) => (
           <li key={k}>

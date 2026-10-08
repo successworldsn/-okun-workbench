@@ -12,7 +12,13 @@
  *   node tools/atlanta-intel/atlanta-feed.mjs --discover          # find the layer URLs
  *   node tools/atlanta-intel/atlanta-feed.mjs                      # default: 730 days of permits
  *   node tools/atlanta-intel/atlanta-feed.mjs --since 365 --zip 30310 --zip 30314 \
- *        --tax lists/tax.csv --foreclosure lists/notices.csv --probate lists/estates.csv
+ *        --tax lists/tax.csv --foreclosure lists/notices.csv --probate lists/estates.csv \
+ *        --deeds lists/deed-index.csv --atl311 lists/atl311.csv --county dekalb:30032,30034
+ *
+ * Enrichment on every parcel pulled: FEMA flood zone (NFHL), Opportunity Zone
+ * tract, distance to the nearest MARTA rail station (GTFS). Deeds + security
+ * deeds come from a clerk's index export (GSCCCA or a records request); ATL311
+ * from its layer if configured, or a CSV export.
  *
  * Layer URLs live in tools/atlanta-intel/sources.json (or env ATL_<KEY>_URL).
  * Run it from a machine whose network can reach gis.atlantaga.gov and
@@ -20,9 +26,13 @@
  * directly, like `npm test`).
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { inflateRawSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mapPermitRow, mapCodeRow, mapParcel, parcelKey, attachListRow, buildMarket, toDealIntelCsvRow, unmappedFields, pick, FIELDS } from "../../src/lib/re-feed-map.ts";
+import {
+  mapPermitRow, mapCodeRow, mapParcel, parcelKey, attachListRow, buildMarket, toDealIntelCsvRow, unmappedFields, pick, FIELDS,
+  mapDeedRow, attachDeeds, map311Row, toPoly, assignFlood, assignOpportunityZones, parseGtfsStations, assignTransit,
+} from "../../src/lib/re-feed-map.ts";
 import { analyzeAll, ownershipYears, rehabEstimate } from "../../src/lib/re-intel.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +51,11 @@ function args() {
     probate: one("--probate"),
     out: one("--out", join(root, "data", "atlanta-intel.json")),
     maxParcels: Number(one("--max-parcels", "5000")),
+    deeds: one("--deeds"),
+    atl311: one("--atl311"),
+    gtfs: one("--gtfs"),
+    counties: all("--county").map((c) => { const [name, zips = ""] = c.split(":"); return { name: name.toLowerCase(), zips: zips.split(",").filter(Boolean) }; }),
+    skipEnrich: a.includes("--no-enrich"),
   };
 }
 
@@ -50,7 +65,70 @@ async function loadSources() {
     const env = process.env[`ATL_${k.toUpperCase()}_URL`];
     if (env) v.url = env;
   }
+  for (const [k, v] of Object.entries(cfg.counties ?? {})) {
+    const env = process.env[`COUNTY_${k.toUpperCase()}_URL`];
+    if (env) v.url = env;
+  }
   return cfg;
+}
+
+/** Minimal .zip reader (central directory + deflate) — enough for a GTFS feed. */
+function unzip(buf) {
+  let eocd = buf.length - 22;
+  while (eocd >= 0 && buf.readUInt32LE(eocd) !== 0x06054b50) eocd--;
+  if (eocd < 0) throw new Error("not a zip");
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const files = {};
+  for (let i = 0; i < count; i++) {
+    const method = buf.readUInt16LE(p + 10), size = buf.readUInt32LE(p + 20);
+    const nameLen = buf.readUInt16LE(p + 28), extra = buf.readUInt16LE(p + 30), comment = buf.readUInt16LE(p + 32);
+    const local = buf.readUInt32LE(p + 42);
+    const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const raw = buf.subarray(start, start + size);
+    files[name] = method === 8 ? inflateRawSync(raw) : raw;
+    p += 46 + nameLen + extra + comment;
+  }
+  return files;
+}
+
+async function loadStations(src) {
+  if (/\.txt$/i.test(src)) return parseGtfsStations(await readFile(src, "utf8"));
+  const buf = /^https?:/.test(src) ? Buffer.from(await (await fetch(src)).arrayBuffer()) : await readFile(src);
+  const stops = Object.entries(unzip(buf)).find(([n]) => /(^|\/)stops\.txt$/.test(n));
+  if (!stops) throw new Error("no stops.txt in GTFS zip");
+  return parseGtfsStations(stops[1].toString("utf8"));
+}
+
+/** Polygons covering the parcels' bounding box, fetched in ~0.05° tiles. */
+async function polygonsOver(layerUrl, props, outFields) {
+  const pts = props.filter((p) => p.lat != null && p.lng != null);
+  if (!pts.length) return [];
+  const xs = pts.map((p) => p.lng), ys = pts.map((p) => p.lat);
+  const step = 0.05, seen = new Set(), out = [];
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x += step)
+    for (let y = Math.min(...ys); y <= Math.max(...ys); y += step) {
+      if (!pts.some((p) => p.lng >= x && p.lng <= x + step && p.lat >= y && p.lat <= y + step)) continue;
+      const feats = [];
+      for (let offset = 0; ; offset += 500) {
+        const j = await getJson(`${layerUrl}/query`, {
+          where: "1=1", geometry: `${x},${y},${x + step},${y + step}`, geometryType: "esriGeometryEnvelope", inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects", outFields, returnGeometry: "true", outSR: "4326",
+          resultOffset: String(offset), resultRecordCount: "500",
+        });
+        feats.push(...(j.features ?? []));
+        if (!j.exceededTransferLimit && (j.features ?? []).length < 500) break;
+      }
+      for (const f of feats) {
+        const id = JSON.stringify(f.attributes);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const g = toPoly(f);
+        if (g) out.push(g);
+      }
+    }
+  return out;
 }
 
 // ─── ArcGIS REST ────────────────────────────────────────────────────────────
@@ -97,7 +175,8 @@ const fieldIn = (meta, candidates) => (meta.fields ?? []).map((f) => f.name).fin
 // ─── Discovery ──────────────────────────────────────────────────────────────
 
 async function discover(cfg) {
-  for (const [key, layer] of Object.entries(cfg.layers)) {
+  const all = [...Object.entries(cfg.layers), ...Object.entries(cfg.counties ?? {}).map(([k, v]) => [`county:${k}`, { ...v, label: `${v.county} County parcels` }])];
+  for (const [key, layer] of all) {
     console.log(`\n${key}  (${layer.label})`);
     console.log(`  configured: ${layer.url ?? "— not set —"}`);
     for (const title of layer.search ?? []) {
@@ -197,6 +276,31 @@ async function main() {
     report.push({ id: "code_history", label: L.code_history.label, url: L.code_history.url, pulledAt, records: features.length, minDate: ds[0] ?? null, maxDate: ds.at(-1) ?? null, unmapped: unmappedFields(features[0]?.attributes, ["parcelId", "caseType", "caseOpened"]) });
   }
 
+  // 2b. ATL311 service requests (layer and/or CSV export) — a second, independent distress signal
+  {
+    const rows = [];
+    if (L.atl311?.url) {
+      const meta = await getJson(L.atl311.url, {});
+      const df = fieldIn(meta, ["CREATED_DATE", "OPENED", "OPEN_DATE", "DATE_CREATED", "REQUESTED_DATE", "CreatedDate"]);
+      const { features } = await query(L.atl311.url, df ? `${df} >= ${sqlDate(new Date(now.getTime() - 548 * 86_400_000))}` : "1=1");
+      rows.push(...features.map((f) => f.attributes));
+    }
+    rows.push(...(await readList(opt.atl311)));
+    let kept = 0;
+    for (const r of rows) {
+      const m = map311Row(r);
+      if (!m) continue;
+      kept++;
+      const key = m.parcel ? parcelKey(m.parcel) : null;
+      if (key) { bucket(key).cases.push(m.case); touched.add(key); }
+      else if (m.address) orphanAddr.push({ addr: normAddr(m.address), case: m.case });
+    }
+    if (rows.length) {
+      const ds = rows.map((r) => map311Row(r)?.case.openedAt).filter(Boolean).sort();
+      report.push({ id: "atl311", label: "ATL311 service requests (property condition only)", url: L.atl311?.url ?? opt.atl311, pulledAt, records: kept, minDate: ds[0] ?? null, maxDate: ds.at(-1) ?? null });
+    }
+  }
+
   // 3. Lists from records requests
   const lists = { tax: await readList(opt.tax), foreclosure: await readList(opt.foreclosure), probate: await readList(opt.probate) };
   for (const [kind, rows] of Object.entries(lists)) {
@@ -243,6 +347,23 @@ async function main() {
     ingest(features, cama);
   }
   report.push({ id: "coa_parcels", label: L.parcels.label, url: L.parcels.url, pulledAt, records: parcels.size });
+
+  // 4b. Other metro counties: same mapper, each county's own parcel layer, swept by ZIP
+  for (const c of opt.counties) {
+    const layer = cfg.counties?.[c.name];
+    if (!layer?.url) { console.error(`No parcel layer URL for county "${c.name}" (sources.json → counties).`); continue; }
+    let n = 0;
+    for (const zip of c.zips) {
+      const { features } = await query(layer.url, `${layer.zipField || "ZIP"} LIKE '${zip}%'`, { geometry: true });
+      for (const f of features) {
+        const key = parcelKey(pick(f.attributes, [...FIELDS.parcelId]));
+        if (!key || parcels.has(key)) continue;
+        parcels.set(key, mapParcel(f.attributes, f.geometry, undefined, pulledAt, { county: layer.county, source: "county_parcels" }));
+        n++;
+      }
+    }
+    report.push({ id: "county_parcels", label: `${layer.county} County parcels (${c.zips.join(", ")})`, url: layer.url, pulledAt, records: n });
+  }
   if (L.cama.url) report.push({ id: "fulton_cama", label: L.cama.label, url: L.cama.url, pulledAt, records: [...parcels.values()].filter((p) => p.provenance?.yearBuilt?.source === "fulton_cama").length });
 
   // 5. Join everything onto the parcel
@@ -270,6 +391,31 @@ async function main() {
   }
 
   const props = [...parcels.values()].filter((p) => p.address);
+
+  // 6. Deed + security-deed index → transfers, open mortgages, satisfactions
+  if (opt.deeds) {
+    const rows = (await readList(opt.deeds)).map(mapDeedRow);
+    const groups = new Map();
+    for (const r of rows) {
+      const p = (r.parcel && parcels.get(parcelKey(r.parcel))) || (r.address && byAddr.get(normAddr(r.address)));
+      if (p) groups.set(p, [...(groups.get(p) ?? []), r]);
+    }
+    for (const [p, rs] of groups) attachDeeds(p, rs, pulledAt);
+    const ds = rows.map((r) => r.date).filter(Boolean).sort();
+    report.push({ id: "deeds", label: "Deed + security-deed index", url: opt.deeds, pulledAt, records: rows.length, minDate: ds[0] ?? null, maxDate: ds.at(-1) ?? null, matched: groups.size });
+  }
+
+  // 7. Free spatial enrichment: FEMA flood zones, Opportunity Zones, MARTA rail
+  if (!opt.skipEnrich) {
+    const enrich = async (id, label, url, fn) => {
+      if (!url) return;
+      try { const n = await fn(); report.push({ id, label, url, pulledAt, records: n }); }
+      catch (e) { console.error(`${label}: ${e.message}`); report.push({ id, label, url, pulledAt, records: 0, error: e.message }); }
+    };
+    await enrich("flood", L.flood.label, L.flood?.url, async () => { const g = await polygonsOver(L.flood.url, props, "FLD_ZONE,ZONE_SUBTY,SFHA_TF"); assignFlood(props, g, pulledAt); return g.length; });
+    await enrich("opportunity_zone", L.opportunity_zones.label, L.opportunity_zones?.url, async () => { const g = await polygonsOver(L.opportunity_zones.url, props, "*"); assignOpportunityZones(props, g, pulledAt); return g.length; });
+    await enrich("transit", L.marta_gtfs.label, opt.gtfs ?? L.marta_gtfs?.url, async () => { const st = await loadStations(opt.gtfs ?? L.marta_gtfs.url); assignTransit(props, st); return st.length; });
+  }
   const market = buildMarket(props, now);
   const out = { version: 1, generatedAt: pulledAt, sinceDays: opt.since, sweptZips: opt.zips, sources: report, market, properties: props };
   await mkdir(dirname(opt.out), { recursive: true });

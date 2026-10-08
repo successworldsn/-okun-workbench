@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+
+.ge-popup .maplibregl-popup-content {
+  background: #03060d;
+  color: #f8fafc;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: 11px var(--font-data), monospace;
+}
+.ge-popup .maplibregl-popup-tip { display: none; }

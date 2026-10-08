@@ -91,7 +91,7 @@ test("equity: amortized mortgage beats the last-sale inference; 30+ years owned 
   assert.ok(Math.abs(remainingBalance(100000, 0.065, 30, 360)) < 1e-6);
   assert.ok(remainingBalance(100000, 0.065, 30, 60) > 90000);
   const v = estimateValue(base({ mortgages: [{ date: ago(365 * 10), amount: 100000 }] }), undefined, NOW);
-  assert.match(v.debtBasis, /security deeds/);
+  assert.match(v.debtBasis, /open security deed/);
   const free = estimateValue(base({ lastSaleDate: ago(365 * 35), lastSalePrice: null }), undefined, NOW);
   assert.equal(free.debt, 0);
   assert.match(free.debtBasis, /inference/);
@@ -114,7 +114,7 @@ test("risk subtracts: a flood-zone twin scores lower", () => {
 
 test("demo set: scores spread out, every property has a why, strategies are ranked", () => {
   const all = analyzeAll(demoProperties(NOW), demoMarket(NOW), NOW);
-  assert.equal(all.length, 16);
+  assert.equal(all.length, 17);
   assert.ok(all[0].score >= 70, `top ${all[0].score}`);
   assert.ok(all[all.length - 1].score < 40, `bottom ${all[all.length - 1].score}`);
   for (const i of all) {

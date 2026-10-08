@@ -1,28 +1,101 @@
 {
-  "note": "Layer URLs for atlanta-feed.mjs. Run `node tools/atlanta-intel/atlanta-feed.mjs --discover` to list candidates, then paste the /FeatureServer/<n> or /MapServer/<n> URL here (or set ATL_<KEY>_URL). Field names are matched by alias, so a layer rename doesn't need code changes; the run prints any field it couldn't map.",
+  "note": "Layer URLs for atlanta-feed.mjs. Run `node tools/atlanta-intel/atlanta-feed.mjs --discover` to list candidates, then paste the /FeatureServer/<n> or /MapServer/<n> URL here (or set ATL_<KEY>_URL). Field names are matched by alias, so a layer rename doesn't need code changes; the run prints any field it couldn't map. County parcel layers: set counties.<name>.url (or COUNTY_<NAME>_URL) and the layer's ZIP field. Deeds come from a clerk's index CSV (--deeds), not a layer.",
   "layers": {
     "parcels": {
       "label": "City of Atlanta tax parcels",
-      "search": ["coa_tax_parcels", "Tax Parcels"],
+      "search": [
+        "coa_tax_parcels",
+        "Tax Parcels"
+      ],
       "url": null,
       "idField": "PARCELID",
       "zipField": "SITEZIP"
     },
     "cama": {
       "label": "Fulton CAMA attributes (Tolemi_Parcels)",
-      "search": ["Tolemi_Parcels"],
+      "search": [
+        "Tolemi_Parcels"
+      ],
       "url": null,
       "idField": null
     },
     "permits": {
       "label": "Atlanta building permits + Building Complaint records",
-      "search": ["Building Permits", "Permits"],
+      "search": [
+        "Building Permits",
+        "Permits"
+      ],
       "url": null
     },
     "code_history": {
-      "label": "Atlanta code enforcement 2021–2023",
-      "search": ["Code_Enforcement_Data_2021_2023", "Code Enforcement"],
+      "label": "Atlanta code enforcement 2021\u20132023",
+      "search": [
+        "Code_Enforcement_Data_2021_2023",
+        "Code Enforcement"
+      ],
       "url": null
+    },
+    "atl311": {
+      "label": "ATL311 service requests",
+      "search": [
+        "ATL311",
+        "311 Service Requests"
+      ],
+      "url": null
+    },
+    "flood": {
+      "label": "FEMA National Flood Hazard Layer (flood hazard zones)",
+      "url": "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28"
+    },
+    "opportunity_zones": {
+      "label": "Federal Opportunity Zone tracts",
+      "search": [
+        "Opportunity Zones",
+        "Opportunity_Zones"
+      ],
+      "url": null
+    },
+    "marta_gtfs": {
+      "label": "MARTA GTFS rail stations",
+      "url": "https://www.itsmarta.com/google_transit_feed/google_transit.zip"
+    }
+  },
+  "counties": {
+    "dekalb": {
+      "county": "DeKalb",
+      "search": [
+        "DeKalb County Parcels",
+        "DeKalb Parcels"
+      ],
+      "url": null,
+      "zipField": "ZIP"
+    },
+    "cobb": {
+      "county": "Cobb",
+      "search": [
+        "Cobb County Parcels",
+        "Cobb Parcels"
+      ],
+      "url": null,
+      "zipField": "ZIP"
+    },
+    "gwinnett": {
+      "county": "Gwinnett",
+      "search": [
+        "Gwinnett County Parcels",
+        "Gwinnett Parcels"
+      ],
+      "url": null,
+      "zipField": "ZIP"
+    },
+    "clayton": {
+      "county": "Clayton",
+      "search": [
+        "Clayton County Parcels",
+        "Clayton Parcels"
+      ],
+      "url": null,
+      "zipField": "ZIP"
     }
   }
 }

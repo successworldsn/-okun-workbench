@@ -25,7 +25,40 @@ export type Basemap = "satellite" | "dark";
 
 const ATL: [number, number] = [-84.39, 33.75];
 
+/**
+ * Self-contained builds (the browser preview) can't reach tile servers, so they
+ * ship terrain tiles inline and the map draws a shaded-relief basemap from them.
+ */
+let embedded: { tiles: Record<string, string>; bounds: [number, number, number, number]; minzoom: number; maxzoom: number } | null = null;
+export function embedTerrain(e: NonNullable<typeof embedded>) {
+  embedded = e;
+  maplibregl.addProtocol("embedded", async (params) => {
+    const key = params.url.replace("embedded://", "");
+    const b64 = e.tiles[key];
+    if (!b64) throw new Error(`no embedded tile ${key}`);
+    return { data: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer };
+  });
+}
+
+function embeddedStyle(): maplibregl.StyleSpecification {
+  const e = embedded!;
+  return {
+    version: 8,
+    projection: { type: "globe" },
+    sources: {
+      dem: { type: "raster-dem", tiles: ["embedded://{z}/{x}/{y}"], tileSize: 256, encoding: "terrarium", bounds: e.bounds, minzoom: e.minzoom, maxzoom: e.maxzoom, attribution: "Terrain: AWS Terrain Tiles (Mapzen) · embedded" },
+    },
+    terrain: { source: "dem", exaggeration: 2.2 },
+    sky: { "sky-color": "#04070F", "horizon-color": "#0B2A3A", "fog-color": "#04070F", "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 7, 0.4, 10, 0] },
+    layers: [
+      { id: "bg", type: "background", paint: { "background-color": "#050B14" } },
+      { id: "relief", type: "hillshade", source: "dem", paint: { "hillshade-shadow-color": "#01030A", "hillshade-highlight-color": "#2DD4BF", "hillshade-accent-color": "#0E7490", "hillshade-exaggeration": 0.85, "hillshade-illumination-direction": 315 } },
+    ],
+  };
+}
+
 function style(base: Basemap, terrain: boolean): maplibregl.StyleSpecification {
+  if (embedded) return embeddedStyle();
   return {
     version: 8,
     projection: { type: "globe" },

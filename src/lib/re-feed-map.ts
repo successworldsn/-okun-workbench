@@ -6,7 +6,7 @@
  * candidate names (case- and punctuation-insensitive) and the feed reports
  * what it could not map instead of silently dropping it.
  */
-import type { CodeCase, MarketContext, Permit, PermitCategory, PropertyRecord, SourceId } from "./re-intel.ts";
+import type { CodeCase, MarketContext, Mortgage, Permit, PermitCategory, PropertyRecord, SourceId, Transfer } from "./re-intel.ts";
 
 export type Row = Record<string, unknown>;
 
@@ -40,14 +40,15 @@ const yes = (v: unknown) => /^(y|yes|true|1|x)$/i.test(String(v ?? "").trim());
 export const parcelKey = (v: unknown) => String(v ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 
 export const FIELDS = {
-  parcelId: ["PARCELID", "PARCEL_ID", "PIN", "ParcelNumber", "PARCEL", "Parcel_No", "LOWPARCELID", "APN"],
-  address: ["SITEADDRESS", "SITUS_ADDRESS", "Address", "ADDRESS", "FULLADDR", "SiteAddr", "PROPERTY_ADDRESS", "LOCATION"],
+  parcelId: ["PARCELID", "PARCEL_NO", "PARID", "PIN_NUM", "PARCELNUMB", "PARCEL_ID", "PIN", "ParcelNumber", "PARCEL", "Parcel_No", "LOWPARCELID", "APN"],
+  address: ["SITEADDRESS", "SITUS_ADDR", "SITUSADDR", "LOCADDR", "LOCATION_ADDRESS", "PROP_ADDR", "SITUS", "SITUS_ADDRESS", "Address", "ADDRESS", "FULLADDR", "SiteAddr", "PROPERTY_ADDRESS", "LOCATION"],
+  city: ["SITECITY", "SITUS_CITY", "LOCCITY", "CITY", "PROP_CITY"],
   zip: ["SITEZIP", "ZIP", "ZIPCODE", "ZIP_CODE", "SitusZip"],
-  owner: ["OWNERNME1", "OWNER", "OWNER_NAME", "Owner1", "OWNERNAME"],
-  ownerMail1: ["PSTLADDRESS", "MAILADDR", "MAILING_ADDRESS", "OWNER_ADDRESS", "OwnerAddr1", "MAIL_ADDR1"],
-  ownerMailCity: ["PSTLCITY", "MAILCITY", "OWNER_CITY", "MAIL_CITY"],
-  ownerMailState: ["PSTLSTATE", "MAILSTATE", "OWNER_STATE", "MAIL_STATE"],
-  ownerMailZip: ["PSTLZIP5", "MAILZIP", "OWNER_ZIP", "MAIL_ZIP"],
+  owner: ["OWNERNME1", "OWNER_NAM1", "OWNNAME", "OWNER1_NAME", "OWN1", "OWNER", "OWNER_NAME", "Owner1", "OWNERNAME"],
+  ownerMail1: ["PSTLADDRESS", "OWNER_ADDR1", "MAIL_ADDRESS", "OWNADDR1", "MAILADDR1", "MAILADDR", "MAILING_ADDRESS", "OWNER_ADDRESS", "OwnerAddr1", "MAIL_ADDR1"],
+  ownerMailCity: ["PSTLCITY", "OWNER_CITY1", "OWNCITY", "MAILCITY1", "MAILCITY", "OWNER_CITY", "MAIL_CITY"],
+  ownerMailState: ["PSTLSTATE", "OWNSTATE", "OWNER_ST", "MAILSTATE1", "MAILSTATE", "OWNER_STATE", "MAIL_STATE"],
+  ownerMailZip: ["PSTLZIP5", "OWNZIP", "OWNER_ZIP5", "MAILZIP1", "MAILZIP", "OWNER_ZIP", "MAIL_ZIP"],
   landUse: ["CLASSDSCRP", "LANDUSE", "LUC_DESC", "PROPERTY_CLASS", "USECD"],
   zoning: ["ZONING", "ZONING_CODE", "ZONECLASS", "Zoning1"],
   lotSqft: ["LOT_SQFT", "LANDSQFT", "LAND_SQFT", "LotSize", "SQFT_LAND"],
@@ -58,7 +59,7 @@ export const FIELDS = {
   yearBuilt: ["RESYRBLT", "YEAR_BUILT", "YRBUILT", "YearBuilt"],
   units: ["UNITS", "LIVING_UNITS", "NUM_UNITS", "DWELLING_UNITS"],
   assessed: ["TOT_ASSESS", "TOTAL_ASSESSED", "ASSESSED_VALUE", "CNTASSDVAL", "TotAssess"],
-  appraised: ["TOT_APPR", "TOTAL_APPRAISED", "APPRAISED_VALUE", "FAIR_MARKET_VALUE", "TotAppr", "MARKET_VALUE"],
+  appraised: ["TOT_APPR", "APPRAISED", "TOTAPR", "FMV_TOTAL", "TOTAL_FMV", "APPR_TOTAL", "TOTAL_APPRAISED", "APPRAISED_VALUE", "FAIR_MARKET_VALUE", "TotAppr", "MARKET_VALUE"],
   landValue: ["LAND_APPR", "LANDVAL", "LAND_VALUE", "LndAppr"],
   homestead: ["HOMESTEAD", "EXEMPT_CODE", "HMSTD", "EXEMPTIONS"],
   saleDate: ["SALEDATE", "SALE_DATE", "LAST_SALE_DATE", "DeedDate"],
@@ -171,9 +172,10 @@ export function centroid(geom: unknown): { lat: number; lng: number } | null {
 }
 
 /** Parcel layer row (+ optional CAMA row for the same parcel) → PropertyRecord base. */
-export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefined, pulledAt: string): PropertyRecord {
+export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefined, pulledAt: string, where: { county: string; city?: string; source?: SourceId } = { county: "Fulton", city: "Atlanta" }): PropertyRecord {
+  const parcelSrc: SourceId = where.source ?? "coa_parcels";
   const both = (k: keyof typeof FIELDS) => pick(cama ?? {}, [...FIELDS[k]]) ?? pick(parcelRow, [...FIELDS[k]]);
-  const srcOf = (k: keyof typeof FIELDS): SourceId => (cama && pick(cama, [...FIELDS[k]]) != null ? "fulton_cama" : "coa_parcels");
+  const srcOf = (k: keyof typeof FIELDS): SourceId => (cama && pick(cama, [...FIELDS[k]]) != null ? "fulton_cama" : parcelSrc);
   const id = parcelKey(pick(parcelRow, [...FIELDS.parcelId]));
   const c = centroid(geometry);
   const mail = [str(pick(parcelRow, [...FIELDS.ownerMail1])), str(pick(parcelRow, [...FIELDS.ownerMailCity])), str(pick(parcelRow, [...FIELDS.ownerMailState])), str(pick(parcelRow, [...FIELDS.ownerMailZip]))].filter(Boolean).join(", ");
@@ -186,9 +188,9 @@ export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefin
   const p: PropertyRecord = {
     id,
     address: str(pick(parcelRow, [...FIELDS.address])) ?? "",
-    city: "Atlanta",
+    city: where.city ?? (str(pick(parcelRow, [...FIELDS.city])) ?? undefined),
     zip: str(pick(parcelRow, [...FIELDS.zip]))?.slice(0, 5) ?? undefined,
-    county: "Fulton",
+    county: where.county,
     lat: c?.lat ?? null,
     lng: c?.lng ?? null,
     owner: str(pick(parcelRow, [...FIELDS.owner])) ?? undefined,
@@ -212,10 +214,10 @@ export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefin
     permits: [],
     codeCases: [],
     provenance: {
-      owner: { source: "coa_parcels", asOf: pulledAt },
-      ownerMailing: { source: "coa_parcels", asOf: pulledAt },
+      owner: { source: parcelSrc, asOf: pulledAt },
+      ownerMailing: { source: parcelSrc, asOf: pulledAt },
       homesteadExemption: { source: srcOf("homestead"), asOf: valueAsOf },
-      fairMarketValue: { source: srcOf("appraised") === "fulton_cama" || srcOf("assessed") === "fulton_cama" ? "fulton_cama" : "coa_parcels", asOf: valueAsOf },
+      fairMarketValue: { source: srcOf("appraised") === "fulton_cama" || srcOf("assessed") === "fulton_cama" ? "fulton_cama" : parcelSrc, asOf: valueAsOf },
       landValue: { source: srcOf("landValue"), asOf: valueAsOf },
       yearBuilt: { source: srcOf("yearBuilt"), asOf: valueAsOf },
       zoning: { source: srcOf("zoning"), asOf: pulledAt },
@@ -302,4 +304,217 @@ export function toDealIntelCsvRow(p: PropertyRecord, extra: { equityPct: number 
     absentee: flag(p.ownerMailing && !String(p.ownerMailing).toUpperCase().startsWith(p.address.toUpperCase())),
     notes: `Parcel ${p.id}`,
   };
+}
+
+// ─── Deeds + security deeds (clerk's real-estate index export) ───────────────
+
+export type DeedKind = "transfer" | "mortgage" | "satisfaction" | "other";
+
+/** Georgia instrument names/codes → what they mean for ownership and debt. */
+export function classifyInstrument(instrument: string): DeedKind {
+  const t = instrument.toUpperCase();
+  if (/CANC|SATISF|RELEASE|\bSAT\b|\bCAN\b/.test(t)) return "satisfaction";
+  if (/SECURITY DEED|\bSD\b|\bDSD\b|MORTGAGE|DEED TO SECURE|\bDTSD\b/.test(t)) return "mortgage";
+  if (/DEED|\bWD\b|\bLWD\b|\bQCD\b|\bEXD\b|\bADMD\b|\bDUP\b|\bFD\b/.test(t)) return "transfer";
+  return "other";
+}
+
+export interface DeedRow {
+  parcel: string | null;
+  address: string | null;
+  kind: DeedKind;
+  instrument: string;
+  date: string | null;
+  amount: number | null;
+  grantor: string | null;
+  grantee: string | null;
+  ref: string | null;
+  /** For a cancellation: the book/page of the security deed it cancels, when the index gives it. */
+  cancels: string | null;
+}
+
+export function mapDeedRow(row: Row): DeedRow {
+  const instrument = str(pick(row, ["INSTRUMENT", "INSTRUMENT_TYPE", "DOC_TYPE", "DOCUMENT_TYPE", "TYPE", "INST_TYPE"])) ?? "";
+  const book = str(pick(row, ["BOOK", "DEED_BOOK", "BK"]));
+  const page = str(pick(row, ["PAGE", "DEED_PAGE", "PG"]));
+  return {
+    parcel: str(pick(row, [...FIELDS.parcelId])),
+    address: str(pick(row, [...FIELDS.address])),
+    kind: classifyInstrument(instrument),
+    instrument,
+    date: date(pick(row, ["RECORDED", "RECORD_DATE", "FILED", "FILE_DATE", "DATE", "INSTRUMENT_DATE"])),
+    amount: num(pick(row, ["AMOUNT", "CONSIDERATION", "SALE_PRICE", "LOAN_AMOUNT", "PRICE"])),
+    grantor: str(pick(row, ["GRANTOR", "SELLER", "FROM"])),
+    grantee: str(pick(row, ["GRANTEE", "BUYER", "TO", "LENDER"])),
+    ref: book && page ? `${book}/${page}` : str(pick(row, ["INSTRUMENT_NUMBER", "DOC_NUMBER", "REF"])),
+    cancels: str(pick(row, ["CANCELS", "REFERENCE", "REF_BOOK_PAGE", "CROSS_REF"])),
+  };
+}
+
+/**
+ * Put a parcel's deed history on the record. Only security deeds recorded
+ * since the latest transfer count as the current owner's debt; a cancellation
+ * closes the security deed it names (book/page) or, failing that, the oldest
+ * open one recorded before it.
+ */
+export function attachDeeds(p: PropertyRecord, rows: DeedRow[], checkedAt: string) {
+  const sorted = rows.filter((r) => r.date).sort((a, b) => a.date!.localeCompare(b.date!));
+  const transfers: Transfer[] = sorted
+    .filter((r) => r.kind === "transfer")
+    .map((r) => ({ date: r.date!, price: r.amount, deedType: r.instrument, grantor: r.grantor ?? undefined, grantee: r.grantee ?? undefined, ref: r.ref ?? undefined }));
+  const lastTransfer = transfers.at(-1)?.date ?? p.lastSaleDate ?? null;
+  const mortgages: Mortgage[] = [];
+  for (const r of sorted) {
+    if (r.kind === "mortgage" && r.amount && (!lastTransfer || r.date! >= lastTransfer.slice(0, 10)))
+      mortgages.push({ date: r.date!, amount: r.amount, lender: r.grantee ?? undefined, ref: r.ref ?? undefined, satisfiedAt: null });
+    if (r.kind === "satisfaction") {
+      const target = (r.cancels && mortgages.find((m) => !m.satisfiedAt && m.ref === r.cancels)) || mortgages.find((m) => !m.satisfiedAt && m.date <= r.date!);
+      if (target) target.satisfiedAt = r.date;
+    }
+  }
+  p.transfers = transfers.reverse();
+  p.mortgages = mortgages;
+  p.deedsCheckedAt = checkedAt;
+  const lastPriced = p.transfers.find((t) => t.price && t.price > 100);
+  if (p.transfers[0] && (!p.lastSaleDate || p.transfers[0].date > p.lastSaleDate)) {
+    p.lastSaleDate = p.transfers[0].date;
+    p.lastSalePrice = lastPriced?.date === p.transfers[0].date ? lastPriced.price : null;
+    p.provenance = { ...p.provenance, lastSaleDate: { source: "deeds", asOf: checkedAt }, lastSalePrice: { source: "deeds", asOf: checkedAt } };
+  }
+}
+
+// ─── ATL311 ─────────────────────────────────────────────────────────────────
+
+const ATL311_RELEVANT = /vacan|abandon|board|unsecur|overgrown|high grass|junk|debris|dumping|squat|blight|structure|housing|code|rodent|trash|illegal/i;
+
+/** One 311 service request → a code-style case, or null when it isn't about the property's condition. */
+export function map311Row(row: Row): { parcel: string | null; address: string | null; case: CodeCase } | null {
+  const type = str(pick(row, ["REQUEST_TYPE", "SERVICE_REQUEST_TYPE", "SR_TYPE", "TYPE", "CATEGORY", "SUBJECT", "CASE_TYPE"])) ?? "";
+  const desc = str(pick(row, ["DESCRIPTION", "DETAILS", "SUB_TYPE", "SUBTYPE"])) ?? "";
+  if (!ATL311_RELEVANT.test(`${type} ${desc}`)) return null;
+  const status = str(pick(row, ["STATUS", "SR_STATUS", "CASE_STATUS"])) ?? undefined;
+  const text = `${type} ${desc}`;
+  return {
+    parcel: str(pick(row, [...FIELDS.parcelId])),
+    address: str(pick(row, [...FIELDS.address, "INCIDENT_ADDRESS", "STREET_ADDRESS"])),
+    case: {
+      id: str(pick(row, ["SR_NUMBER", "CASE_NUMBER", "REQUEST_ID", "SERVICE_REQUEST_ID", "ID", "OBJECTID"])) ?? "",
+      source: "atl311",
+      openedAt: date(pick(row, ["CREATED_DATE", "OPENED", "OPEN_DATE", "DATE_CREATED", "REQUESTED_DATE", "CreatedDate"])),
+      status,
+      type: [type, desc].filter(Boolean).join(" · "),
+      open: status ? !CLOSED_STATUS.test(status) : undefined,
+      vacant: /vacan|abandon|squat/i.test(text),
+      boarded: /board/i.test(text),
+      structural: /structur|collapse|unsafe/i.test(text),
+    },
+  };
+}
+
+// ─── Polygons: FEMA flood zones, Opportunity Zones ───────────────────────────
+
+/** Even-odd ray cast over every ring, so holes in ArcGIS polygons work. */
+export function pointInRings(lng: number, lat: number, rings: number[][][]): boolean {
+  let inside = false;
+  for (const ring of rings)
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+  return inside;
+}
+
+export interface Poly {
+  rings: number[][][];
+  attrs: Row;
+  bbox: [number, number, number, number];
+}
+
+export function toPoly(f: { attributes: Row; geometry?: { rings?: number[][][] } | null }): Poly | null {
+  const rings = f.geometry?.rings;
+  if (!rings?.length) return null;
+  const xs = rings.flat().map((p) => p[0]), ys = rings.flat().map((p) => p[1]);
+  return { rings, attrs: f.attributes, bbox: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] };
+}
+
+export function polyAt(polys: Poly[], lng: number, lat: number): Poly | null {
+  return polys.find((g) => lng >= g.bbox[0] && lng <= g.bbox[2] && lat >= g.bbox[1] && lat <= g.bbox[3] && pointInRings(lng, lat, g.rings)) ?? null;
+}
+
+/** NFHL flood hazard polygons → p.floodZone ("AE", "X", "0.2 PCT ANNUAL CHANCE" …). */
+export function assignFlood(props: PropertyRecord[], polys: Poly[], asOf: string) {
+  for (const p of props) {
+    if (p.lat == null || p.lng == null) continue;
+    const hit = polyAt(polys, p.lng, p.lat);
+    p.floodZone = hit ? str(pick(hit.attrs, ["FLD_ZONE", "ZONE", "FLOOD_ZONE"])) : "X (outside mapped hazard)";
+    p.provenance = { ...p.provenance, floodZone: { source: "flood", asOf } };
+  }
+}
+
+export function assignOpportunityZones(props: PropertyRecord[], polys: Poly[], asOf: string) {
+  for (const p of props) {
+    if (p.lat == null || p.lng == null) continue;
+    p.opportunityZone = !!polyAt(polys, p.lng, p.lat);
+    p.provenance = { ...p.provenance, opportunityZone: { source: "opportunity_zone", asOf } };
+  }
+}
+
+// ─── MARTA rail stations (GTFS stops.txt) ────────────────────────────────────
+
+export interface Station {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+function csvLine(line: string): string[] {
+  const out: string[] = [];
+  let f = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { out.push(f); f = ""; }
+    else f += c;
+  }
+  out.push(f);
+  return out;
+}
+
+/** Rail stations from a GTFS stops.txt: parent stations, or stops named "… STATION" (MARTA's convention), one per name. */
+export function parseGtfsStations(stopsTxt: string): Station[] {
+  const lines = stopsTxt.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+  const head = csvLine(lines[0]).map((h) => h.trim());
+  const ix = (k: string) => head.indexOf(k);
+  const byName = new Map<string, Station>();
+  for (const l of lines.slice(1)) {
+    const r = csvLine(l);
+    const name = (r[ix("stop_name")] ?? "").trim();
+    const lt = r[ix("location_type")] ?? "";
+    if (!(lt === "1" || /\bSTATION\b/i.test(name))) continue;
+    const key = name.toUpperCase().replace(/\s*(STATION).*$/, " STATION");
+    const lat = Number(r[ix("stop_lat")]), lng = Number(r[ix("stop_lon")]);
+    if (isFinite(lat) && isFinite(lng) && !byName.has(key)) byName.set(key, { name: key.replace(/\b\w+/g, (w) => w[0] + w.slice(1).toLowerCase()), lat, lng });
+  }
+  return [...byName.values()];
+}
+
+const milesBetween = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const toR = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(toR(b.lat - a.lat) / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(toR(b.lng - a.lng) / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(h));
+};
+
+export function assignTransit(props: PropertyRecord[], stations: Station[]) {
+  if (!stations.length) return;
+  for (const p of props) {
+    if (p.lat == null || p.lng == null) continue;
+    let best: Station | null = null, d = Infinity;
+    for (const s of stations) {
+      const m = milesBetween({ lat: p.lat, lng: p.lng }, s);
+      if (m < d) { d = m; best = s; }
+    }
+    p.transitMi = Math.round(d * 100) / 100;
+    p.transitName = best!.name;
+  }
 }

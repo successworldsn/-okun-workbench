@@ -87,6 +87,17 @@ node tools/atlanta-intel/atlanta-feed.mjs --since 730 --zip 30310 --zip 30314 \
      --tax lists/tax.csv --foreclosure lists/notices.csv --probate lists/estates.csv
 ```
 
+More free sources, each joined to the parcel and badged:
+
+| Source | How it arrives | What it feeds |
+|---|---|---|
+| Deeds + security deeds | `--deeds index.csv` (clerk's index export: GSCCCA or a records request) | Transfers, estate/executor deeds (motivation), deed under power (risk); open security deeds since the last transfer, closed by a recorded cancellation → equity from records, not a guess |
+| ATL311 service requests | `atl311` layer URL and/or `--atl311 export.csv` (condition requests only: vacant, abandoned, dumping, overgrowth…) | A second, independent distress signal, so "vacant" can be corroborated |
+| FEMA flood zones | NFHL `MapServer/28`, point-in-polygon per parcel | Risk engine |
+| Opportunity Zones | Tract polygon layer (set via `--discover`) | Development engine |
+| MARTA rail stations | MARTA GTFS (`google_transit.zip` or `--gtfs stops.txt`) | Distance to the nearest station (development engine) |
+| DeKalb, Cobb, Gwinnett, Clayton | Each county's parcel layer in `sources.json → counties`, swept with `--county dekalb:30032,30034` | Same engines; the Atlanta zoning screen is skipped outside the city |
+
 Output: `data/atlanta-intel.json` (git-ignored: it holds owner names) and
 `data/deal-intel-import.csv`, which pastes straight into the Atlanta Deal
 Intelligence worksheet's importer for full underwriting. On Vercel, upload the
@@ -118,6 +129,12 @@ queue puts due follow-ups first, then untouched properties by score.
 within 5 miles of Atlanta with at least $200K equity", "vacant where zoning
 allows more units", "20 best I haven't contacted", "why is this ranked 94?".
 It echoes what it understood as a removable chip.
+
+**Browser preview** (`node tools/godseye-preview/build.mjs`): bundles the real
+Deal Desk, engines and EXAMPLE data into one self-contained HTML file
+(`dist/godseye-preview.html`, ~6 MB) with Atlanta terrain tiles embedded, so it
+opens anywhere without the server, Supabase or tile servers. Desk clicks are
+kept in that browser's localStorage.
 
 **Map sources** (free, credited on the map): Esri World Imagery, CARTO dark
 basemap (OpenStreetMap data), AWS Terrain Tiles. MIT covers our code, not these
