@@ -19,6 +19,9 @@ export interface MapPoint {
   focus: number;
   dim: boolean;
   label: string;
+  /** Optional fixed color (e.g. by fuel) and size multiplier (e.g. by MW). */
+  color?: string;
+  size?: number;
 }
 
 export type Basemap = "satellite" | "dark";
@@ -121,8 +124,22 @@ function style(base: Basemap, terrain: boolean): maplibregl.StyleSpecification {
 function toGeo(points: MapPoint[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: points.map((p) => ({ type: "Feature", id: p.id, geometry: { type: "Point", coordinates: [p.lng, p.lat] }, properties: { id: p.id, score: p.score, focus: p.focus, dim: p.dim ? 1 : 0, label: p.label } })),
+    features: points.map((p) => ({ type: "Feature", id: p.id, geometry: { type: "Point", coordinates: [p.lng, p.lat] }, properties: { id: p.id, score: p.score, focus: p.focus, dim: p.dim ? 1 : 0, label: p.label, ...(p.color ? { color: p.color } : {}), size: p.size ?? 1 } })),
   };
+}
+
+/** Context drawn under the points: a state outline and power lines (properties.kind "outline" | "line", kv). */
+function addOverlay(map: MLMap, overlay: GeoJSON.FeatureCollection | null) {
+  if (!overlay || map.getSource("grid")) return;
+  map.addSource("grid", { type: "geojson", data: overlay });
+  const isLine = ["==", ["get", "kind"], "line"] as maplibregl.FilterSpecification;
+  const isOutline = ["==", ["get", "kind"], "outline"] as maplibregl.FilterSpecification;
+  const kvColor = ["case", [">=", ["get", "kv"], 450], "#C9A84C", "#22D3EE"] as maplibregl.ExpressionSpecification;
+  map.addLayer({ id: "grid-state-fill", type: "fill", source: "grid", filter: isOutline, paint: { "fill-color": "#0B2233", "fill-opacity": 0.55 } });
+  map.addLayer({ id: "grid-state-glow", type: "line", source: "grid", filter: isOutline, paint: { "line-color": "#06B6D4", "line-width": 6, "line-blur": 6, "line-opacity": 0.35 } });
+  map.addLayer({ id: "grid-state", type: "line", source: "grid", filter: isOutline, paint: { "line-color": "#67E8F9", "line-width": 1.2, "line-opacity": 0.8 } });
+  map.addLayer({ id: "grid-glow", type: "line", source: "grid", filter: isLine, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": kvColor, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3, 10, 8], "line-blur": 4, "line-opacity": 0.28 } });
+  map.addLayer({ id: "grid-line", type: "line", source: "grid", filter: isLine, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": kvColor, "line-width": ["interpolate", ["linear"], ["zoom"], 5, ["case", [">=", ["get", "kv"], 450], 1.4, 0.7], 10, ["case", [">=", ["get", "kv"], 450], 2.6, 1.4]], "line-opacity": 0.85 } });
 }
 
 function addLayers(map: MLMap, points: MapPoint[], comps: CompPoint[]) {
@@ -146,8 +163,8 @@ function addLayers(map: MLMap, points: MapPoint[], comps: CompPoint[]) {
     source: "props",
     filter: ["==", ["get", "dim"], 0],
     paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, ["+", 4, ["/", ["get", "focus"], 12]], 16, ["+", 14, ["/", ["get", "focus"], 4]]],
-      "circle-color": ["interpolate", ["linear"], ["get", "focus"], 0, "#0EA5E9", 50, "#F59E0B", 80, "#EF4444"],
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, ["*", ["get", "size"], ["+", 4, ["/", ["get", "focus"], 12]]], 16, ["*", ["get", "size"], ["+", 14, ["/", ["get", "focus"], 4]]]],
+      "circle-color": ["coalesce", ["get", "color"], ["interpolate", ["linear"], ["get", "focus"], 0, "#0EA5E9", 50, "#F59E0B", 80, "#EF4444"]],
       "circle-opacity": 0.18,
       "circle-blur": 0.6,
     },
@@ -157,8 +174,8 @@ function addLayers(map: MLMap, points: MapPoint[], comps: CompPoint[]) {
     type: "circle",
     source: "props",
     paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 16, 7],
-      "circle-color": ["case", ["==", ["get", "dim"], 1], "#334155", ["interpolate", ["linear"], ["get", "focus"], 0, "#22D3EE", 50, "#FBBF24", 80, "#F87171"]],
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, ["*", ["get", "size"], 3], 16, ["*", ["get", "size"], 7]],
+      "circle-color": ["case", ["==", ["get", "dim"], 1], "#334155", ["coalesce", ["get", "color"], ["interpolate", ["linear"], ["get", "focus"], 0, "#22D3EE", 50, "#FBBF24", 80, "#F87171"]]],
       "circle-stroke-color": ["case", ["boolean", ["feature-state", "selected"], false], "#FFFFFF", "#020617"],
       "circle-stroke-width": ["case", ["boolean", ["feature-state", "selected"], false], 3, 1],
       "circle-opacity": ["case", ["==", ["get", "dim"], 1], 0.45, 1],
@@ -175,7 +192,10 @@ export function GodsEyeMap({
   comps = [],
   home = { center: ATL, zoom: 10.6, pitch: 50 },
   selectZoom = 15.4,
+  overlay = null,
 }: {
+  /** Lines and outlines drawn beneath the points (Capital Desk: the transmission grid). */
+  overlay?: GeoJSON.FeatureCollection | null;
   comps?: CompPoint[];
   /** Where the orbit → ground entrance lands, and how close a selection flies. */
   home?: { center: [number, number]; zoom: number; pitch: number };
@@ -190,6 +210,8 @@ export function GodsEyeMap({
   const mapRef = useRef<MLMap | null>(null);
   const pointsRef = useRef(points);
   const compsRef = useRef(comps);
+  const overlayRef = useRef(overlay);
+  overlayRef.current = overlay;
   compsRef.current = comps;
   const selRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelect);
@@ -210,6 +232,7 @@ export function GodsEyeMap({
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.on("style.load", () => {
+      addOverlay(map, overlayRef.current);
       addLayers(map, pointsRef.current, compsRef.current);
       if (selRef.current) map.setFeatureState({ source: "props", id: selRef.current }, { selected: true });
     });

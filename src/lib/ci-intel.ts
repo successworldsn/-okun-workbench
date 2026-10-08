@@ -139,6 +139,8 @@ export interface Site {
   floodZone?: string | null;
   incentives?: string[];
   evidence: Partial<Record<"power" | "fiber" | "land" | "water" | "zoning" | "owner" | "flood" | "generation", CiEvidence>>;
+  /** Satellite photo of the site (path or data: URI) and its credit line. */
+  media?: { sat?: string; credit?: string };
   example?: boolean;
 }
 

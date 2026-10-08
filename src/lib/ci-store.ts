@@ -35,3 +35,16 @@ export async function loadInfraFeed(): Promise<InfraFeed | null> {
   cache = { at: Date.now(), feed };
   return feed;
 }
+
+const RAW_GRID = RAW.replace("ga-infra.json", "ga-grid.json");
+let gridCache: { at: number; grid: GeoJSON.FeatureCollection | null } | null = null;
+
+/** Transmission lines + state outline for the map (data/public/ga-grid.json). */
+export async function loadGrid(): Promise<GeoJSON.FeatureCollection | null> {
+  if (gridCache && Date.now() - gridCache.at < 15 * 60_000) return gridCache.grid;
+  const ok = (j: unknown) => ((j as GeoJSON.FeatureCollection)?.type === "FeatureCollection" ? (j as GeoJSON.FeatureCollection) : null);
+  let grid = await readFile(join(process.cwd(), "data", "public", "ga-grid.json"), "utf8").then((t) => ok(JSON.parse(t))).catch(() => null);
+  if (!grid && process.env.CI_INFRA_GITHUB !== "off") grid = await fetch(RAW_GRID, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then(ok).catch(() => null);
+  gridCache = { at: Date.now(), grid };
+  return grid;
+}

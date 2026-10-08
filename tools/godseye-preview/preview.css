@@ -13,3 +13,12 @@ body { font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
   font: 11px var(--font-data), monospace;
 }
 .ge-popup .maplibregl-popup-tip { display: none; }
+
+/* Capital Desk instruments: satellite scan line, radar sweep, card reveal. */
+@keyframes ge-scan { from { top: 0; } to { top: 100%; } }
+@keyframes ge-sweep { to { transform: rotate(360deg); } }
+@keyframes ge-rise { from { transform: translateY(6px); opacity: .4; } to { transform: none; opacity: 1; } }
+.ge-scan { animation: ge-scan 4.5s linear infinite; }
+.ge-sweep { animation: ge-sweep 3.2s linear infinite; }
+.ge-rise { animation: ge-rise .45s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .ge-scan, .ge-sweep, .ge-rise { animation: none; } }

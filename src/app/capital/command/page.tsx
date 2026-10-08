@@ -1,6 +1,6 @@
 import { analyzeSites } from "@/lib/ci-intel";
 import { demoCapital, demoDeals, demoMemories, demoSignals, demoSites } from "@/lib/ci-demo";
-import { loadInfraFeed } from "@/lib/ci-store";
+import { loadGrid, loadInfraFeed } from "@/lib/ci-store";
 import { CapitalDesk } from "@/components/capital/CapitalDesk";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +13,11 @@ export const metadata = { title: "God's Eye · AI Infrastructure Intelligence" }
  */
 export default async function CapitalCommand() {
   const now = new Date();
-  const feed = await loadInfraFeed();
+  const [feed, grid] = await Promise.all([loadInfraFeed(), loadGrid()]);
   if (feed) {
     const sites = analyzeSites(feed.sites, [], [], now);
     const { sites: _omit, ...meta } = feed;
-    return <CapitalDesk sites={sites} rawSites={feed.sites} feed={meta} signals={[]} capital={[]} initialDeals={[]} initialMemories={[]} nowIso={now.toISOString()} example={false} />;
+    return <CapitalDesk sites={sites} rawSites={feed.sites} feed={meta} grid={grid} signals={[]} capital={[]} initialDeals={[]} initialMemories={[]} nowIso={now.toISOString()} example={false} />;
   }
   const signals = demoSignals(now);
   const capital = demoCapital(now);

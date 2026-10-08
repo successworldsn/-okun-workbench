@@ -11,7 +11,7 @@
  */
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LAYERS, THESIS_LABELS, ROLE_LABELS, CI_SOURCES, CI_ASSUME, analyzeSites, ciBadge, fmtUsd, layerCounts, type Site, type SiteIntel, type AssetType, type CapitalKind, type SignalKind, type CiSourceId, type Signal, type CapitalSource, type CiBadge, type CiEvidence } from "@/lib/ci-intel";
 import {
   AGENTS,
@@ -34,6 +34,7 @@ import {
   type Temperature,
 } from "@/lib/ci-deal";
 import type { MapPoint, CompPoint } from "@/components/realestate/GodsEyeMap";
+import { FUEL, fuelOf, cleanName, FuelChip, ScoreRing, Radar, Donut, Legend, HBars, Histogram, ConstellationGraph, SatFrame, type Fuel } from "./viz";
 
 const GodsEyeMap = dynamic(() => import("@/components/realestate/GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
@@ -61,13 +62,6 @@ function save(key: string, v: unknown) {
   }
 }
 
-const Stars = ({ n }: { n: number }) => (
-  <span className="font-mono tracking-tighter text-gold" aria-label={`${n} of 5`}>
-    {"★".repeat(n)}
-    <span className="text-elevated">{"★".repeat(5 - n)}</span>
-  </span>
-);
-
 function Ev({ e, now }: { e: CiEvidence; now: Date }) {
   const b = ciBadge(e, now);
   return (
@@ -89,6 +83,7 @@ export function CapitalDesk({
   sites: sitesIn,
   rawSites,
   feed,
+  grid = null,
   signals: signalsIn,
   capital: capitalIn,
   initialDeals,
@@ -100,6 +95,8 @@ export function CapitalDesk({
   /** Live mode: unscored sites from the feed, re-scored here as you add funds and signals. */
   rawSites?: Site[];
   feed?: InfraFeedMeta | null;
+  /** Transmission lines + state outline drawn under the points. */
+  grid?: GeoJSON.FeatureCollection | null;
   signals: Signal[];
   capital: CapitalSource[];
   initialDeals: Deal[];
@@ -155,7 +152,14 @@ export function CapitalDesk({
   const team = useMemo(() => (sel ? runDealTeam(sel, signals, capital, memories, playbook, now) : null), [sel, signals, capital, memories, playbook, now]);
   const visible = layer === "all" ? sites : sites.filter((s) => s.layers.includes(layer as never));
 
-  const points: MapPoint[] = useMemo(() => sites.map((s) => ({ id: s.site.id, lat: s.site.lat, lng: s.site.lng, score: s.score, focus: s.score, dim: layer !== "all" && !s.layers.includes(layer as never), label: s.site.name })), [sites, layer]);
+  const points: MapPoint[] = useMemo(
+    () =>
+      sites.map((s) => {
+        const mw = s.site.power.onsiteGenerationMw ?? s.site.power.reportedMw ?? s.site.power.estimatedMw ?? 0;
+        return { id: s.site.id, lat: s.site.lat, lng: s.site.lng, score: s.score, focus: s.score, dim: layer !== "all" && !s.layers.includes(layer as never), label: `${s.site.name} · ${mw} MW`, color: example ? undefined : FUEL[fuelOf(s.site)].color, size: example ? 1 : Math.min(2.6, 0.8 + Math.sqrt(mw) / 22) };
+      }),
+    [sites, layer, example],
+  );
   const sigPoints: CompPoint[] = useMemo(() => signals.filter((g) => g.lat != null).map((g) => ({ id: g.id, lat: g.lat!, lng: g.lng!, renovated: ["dc_announcement", "large_load_filing", "ppa", "funding_round"].includes(g.kind), label: g.title })), [signals]);
 
   const activeDeals = deals.filter((d) => !["CLOSED", "DEAD"].includes(d.stage));
@@ -339,30 +343,63 @@ export function CapitalDesk({
           </div>
           <div className="px-3 pb-1 pt-2 font-mono text-[10px] tracking-[0.25em] text-muted">🔥 HOT OPPORTUNITIES</div>
           <ol className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-            {visible.map((i, n) => (
-              <li key={i.site.id}>
-                <button onClick={() => { setSelId(i.site.id); setView("command"); setTab("WHY"); }} className={`mb-1 w-full rounded border px-2 py-1.5 text-left ${selId === i.site.id ? "border-gold/60 bg-gold/10" : "border-transparent hover:border-cyan/20 hover:bg-elevated/60"}`}>
-                  <div className="flex items-baseline gap-2">
-                    <span className="w-5 font-mono text-[10px] text-muted">{String(n + 1).padStart(2, "0")}</span>
-                    <span className="font-mono text-[13px] font-bold">{i.score}</span>
-                    <span className="truncate text-[12px]">{i.site.name}</span>
-                  </div>
-                  <div className="ml-7 grid grid-cols-2 gap-x-2 text-[9px] text-muted">
-                    <span>Power <Stars n={i.stars.power} /></span>
-                    <span>Fiber <Stars n={i.stars.fiber} /></span>
-                    <span>Zoning <Stars n={i.stars.zoning} /></span>
-                    <span>Demand <Stars n={i.stars.demand} /></span>
-                  </div>
-                </button>
-              </li>
-            ))}
+            {visible.slice(0, 120).map((i, n) => {
+              const fuel = fuelOf(i.site);
+              const mw = i.site.power.onsiteGenerationMw ?? i.site.power.reportedMw ?? i.site.power.estimatedMw ?? null;
+              return (
+                <li key={i.site.id} className={n < 12 ? "ge-rise" : undefined} style={n < 12 ? { animationDelay: `${n * 35}ms` } : undefined}>
+                  <button
+                    onClick={() => { setSelId(i.site.id); setView("command"); setTab("WHY"); }}
+                    className={`group mb-1.5 flex w-full items-stretch gap-2 overflow-hidden rounded border text-left transition-colors ${selId === i.site.id ? "border-gold/70 bg-gold/10" : "border-elevated/60 bg-[#070C17] hover:border-cyan/40"}`}
+                  >
+                    <SatFrame site={i.site} compact className="w-[92px] shrink-0">
+                      <span className="absolute left-1 top-1 rounded-sm bg-[#02040A]/80 px-1 font-mono text-[9px] text-muted">{String(n + 1).padStart(2, "0")}</span>
+                    </SatFrame>
+                    <div className="min-w-0 flex-1 py-1.5">
+                      <div className="truncate text-[12px] font-semibold text-bone">{cleanName(i.site.name)}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                        <FuelChip fuel={fuel} />
+                        <span className="truncate font-mono text-[9px] uppercase text-muted">{i.site.county}</span>
+                      </div>
+                      {mw != null && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="relative h-1 flex-1 overflow-hidden rounded-sm bg-elevated">
+                            <span className="absolute inset-y-0 left-0" style={{ width: `${Math.min(100, (mw / 3500) * 100)}%`, background: FUEL[fuel].color }} />
+                          </span>
+                          <span className="font-mono text-[9px] tabular-nums text-ash">{mw.toLocaleString()} MW</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid place-items-center pr-1.5">
+                      <ScoreRing value={i.score} size={40} stroke={3.5} />
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         </aside>
         <main className="relative order-1 h-[34vh] min-w-0 flex-1 lg:order-2 lg:h-auto">
-          <GodsEyeMap points={points} selectedId={selId} onSelect={(id) => { setSelId(id); setTab("WHY"); }} basemap="dark" terrain={false} comps={sigPoints} home={{ center: [-83.6, 32.9], zoom: 6.6, pitch: 35 }} selectZoom={11.5} />
+          <GodsEyeMap points={points} selectedId={selId} onSelect={(id) => { setSelId(id); setTab("WHY"); }} basemap="dark" terrain={false} comps={sigPoints} home={{ center: [-83.4, 32.75], zoom: 6.3, pitch: 38 }} selectZoom={11.5} overlay={grid} />
           <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(2,4,10,0.95)]" />
           <div className="pointer-events-none absolute left-2 top-2 rounded border border-cyan/20 bg-[#03060D]/80 px-2 py-1 font-mono text-[9px] tracking-wider text-ash">
-            ● sites by score · <span className="text-gold">◆ demand signals</span> · ◇ other signals
+            {example ? (
+              <>
+                ● sites by score · <span className="text-gold">◆ demand signals</span> · ◇ other signals
+              </>
+            ) : (
+              <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {(["nuclear", "gas", "coal", "hydro", "solar", "substation"] as Fuel[]).map((f) => (
+                  <span key={f} className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full" style={{ background: FUEL[f].color, boxShadow: `0 0 6px ${FUEL[f].color}` }} />
+                    {FUEL[f].label}
+                  </span>
+                ))}
+                <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-gold" />500 kV</span>
+                <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-cyan" />230 kV</span>
+                <span className="text-muted">· dot size = MW</span>
+              </span>
+            )}
           </div>
           {view !== "command" && (
             <div className="absolute inset-0 z-10 overflow-y-auto bg-[#02040A]/94 p-4 backdrop-blur-sm">
@@ -388,17 +425,7 @@ export function CapitalDesk({
               onQueue={(id, status) => setQueue((q) => q.map((x) => (x.id === id ? { ...x, status } : x)))}
             />
           ) : (
-            <div className="grid h-full place-items-center p-6 text-center">
-              <div>
-                <div className="font-mono text-[10px] tracking-[0.3em] text-muted">FIND THE MONEY BEFORE IT MOVES</div>
-                <p className="mt-2 text-sm text-ash">Pick a site on the map or in Hot opportunities.</p>
-                {sites[0] && (
-                  <button onClick={() => setSelId(sites[0].site.id)} className="mt-4 rounded-control bg-gold/20 px-4 py-2 font-mono text-xs tracking-widest text-gold hover:bg-gold/30">
-                    OPEN #1 · {sites[0].site.name}
-                  </button>
-                )}
-              </div>
-            </div>
+            <Overview sites={sites} onOpen={(id) => { setSelId(id); setTab("WHY"); }} />
           )}
         </section>
       </div>
@@ -413,46 +440,59 @@ function Dossier({ i, tab, setTab, now, team, queue, onRunTeam, onStartDeal, onQ
   const s = i.site;
   return (
     <div>
+      <SatFrame site={s} className="w-full">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#02040A] via-[#02040A]/85 to-transparent px-3 pb-2.5 pt-10">
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[9px] tracking-[0.25em] text-muted">
+            OPPORTUNITY · {s.id}
+            {s.example ? <span className="rounded bg-status-amber/15 px-1 text-status-amber">EXAMPLE · FICTIONAL</span> : <FuelChip fuel={fuelOf(s)} />}
+            {s.floodZone && /^(A|AE|V)/i.test(s.floodZone) && <span className="rounded-sm bg-status-red/15 px-1 text-status-red">FLOOD {s.floodZone}</span>}
+          </div>
+          <h2 className="mt-1 font-display text-xl font-bold leading-tight text-bone [text-wrap:balance]">{cleanName(s.name)}</h2>
+          <div className="text-[11px] text-ash">
+            {s.county} County, {s.state} · {s.acres != null ? `${s.acres} acres` : "power node"} · {s.existingUse.replace("_", " ")}
+            {s.owner ? ` · ${s.owner}` : ""}
+          </div>
+        </div>
+      </SatFrame>
       <div className="border-b border-cyan/10 p-3">
-        <div className="font-mono text-[9px] tracking-[0.3em] text-muted">
-          OPPORTUNITY · {s.id} {s.example && <span className="ml-1 rounded bg-status-amber/15 px-1 text-status-amber">EXAMPLE · FICTIONAL</span>}
-        </div>
-        <h2 className="mt-1 font-display text-lg font-bold leading-tight">{s.name}</h2>
-        <div className="text-[11px] text-ash">
-          {s.county} County, {s.state} · {s.acres != null ? `${s.acres} acres` : "power node"} · zoned {s.zoning.replace("_", " ")} · {s.existingUse.replace("_", " ")}
-        </div>
-        <div className="mt-2 flex items-end gap-4">
-          <div>
-            <div className="font-mono text-[9px] tracking-[0.25em] text-muted">OPPORTUNITY</div>
-            <div className="font-mono text-3xl font-bold leading-none">
-              {i.score}
-              <span className="text-sm text-muted">/100</span>
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3">
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <ScoreRing value={i.score} size={76} stroke={6} sub="SCORE" label="Opportunity score" />
+              <ScoreRing value={i.confidence} size={56} stroke={4} sub="CONF" label="Confidence" />
             </div>
+            <PowerStats s={s} />
+            <EvidenceBar b={i.badges} />
           </div>
-          <div>
-            <div className="font-mono text-[9px] tracking-[0.25em] text-muted">CONFIDENCE</div>
-            <div className="font-mono text-xl leading-none text-cyan">{i.confidence}%</div>
-          </div>
-          <div className="ml-auto text-right font-mono text-[10px] text-ash">
-            {i.badges.VERIFIED} verified · {i.badges.REPORTED} reported
-            <br />
-            {i.badges.INFERRED} estimated · {i.badges.STALE} stale
-          </div>
+          <Radar
+            size={210}
+            axes={[
+              { label: "Power", value: i.factors.power.score },
+              { label: "Fiber", value: i.factors.fiber.score },
+              { label: "Land", value: i.factors.land.score },
+              { label: "Zoning", value: i.factors.zoning.score },
+              { label: "Water", value: i.factors.water.score },
+              { label: "Demand", value: i.factors.activity.score },
+              { label: "Capital", value: i.factors.capital.score },
+            ]}
+          />
         </div>
-        <div className="mt-2 grid grid-cols-5 gap-1 text-center font-mono text-[9px] text-muted">
-          {(["power", "fiber", "zoning", "demand", "capital"] as const).map((k) => (
-            <div key={k}>
-              {k.toUpperCase()}
-              <br />
-              <Stars n={i.stars[k]} />
+        <div className="mt-2 grid gap-1">
+          {i.theses.filter((t) => t.key !== "no_go").slice(0, 3).map((t, n) => (
+            <div key={t.key} className="grid grid-cols-[1fr_auto] items-center gap-2 text-[10px]">
+              <span className="relative h-5 overflow-hidden rounded-sm bg-elevated/60">
+                <span className="absolute inset-y-0 left-0" style={{ width: `${t.fit}%`, background: n === 0 ? "linear-gradient(90deg,#C9A84C33,#C9A84C)" : "linear-gradient(90deg,#06B6D422,#06B6D499)" }} />
+                <span className="absolute inset-0 flex items-center truncate px-2 text-bone">{THESIS_LABELS[t.key]}</span>
+              </span>
+              <span className="w-6 text-right font-mono tabular-nums text-bone">{t.fit}</span>
             </div>
           ))}
         </div>
         <div className="mt-2 flex gap-1 font-mono text-[10px] tracking-wider">
-          <button onClick={onStartDeal} className="rounded bg-gold/20 px-3 py-1 text-gold hover:bg-gold/30">
+          <button onClick={onStartDeal} className="rounded bg-gold/20 px-3 py-1.5 text-gold hover:bg-gold/30">
             ⚡ START DEAL
           </button>
-          <button onClick={onRunTeam} className="rounded border border-cyan/30 px-3 py-1 text-cyan hover:bg-cyan/10">
+          <button onClick={onRunTeam} className="rounded border border-cyan/30 px-3 py-1.5 text-cyan hover:bg-cyan/10">
             RUN DEAL TEAM
           </button>
         </div>
@@ -514,6 +554,7 @@ function Dossier({ i, tab, setTab, now, team, queue, onRunTeam, onStartDeal, onQ
         {tab === "CONSTELLATION" && (
           <>
             <div className="font-mono text-[9px] tracking-[0.25em] text-gold">CAPITAL CONSTELLATION · {i.constellation.completeness}% COMPLETE</div>
+            <ConstellationGraph site={s.name} slots={i.constellation.slots.map((x) => ({ role: x.role, label: ROLE_LABELS[x.role], filledBy: x.filledBy }))} />
             <ul className="mt-2 space-y-1.5">
               {i.constellation.slots.map((x) => (
                 <li key={x.role} className="flex items-start gap-2 text-[11px]">
@@ -788,6 +829,130 @@ function DealsView({ deals, setDeals, dealId, setDealId, playbook, recordOffer, 
               <p className="mt-2 text-[10px] text-muted">The desk records the counter; you send it. Accepting, signing, money and ownership always stop for you.</p>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Visual panels ────────────────────────────────────────────────────────────
+
+function PowerStats({ s }: { s: SiteIntel["site"] }) {
+  const mw = s.power.onsiteGenerationMw ?? s.power.reportedMw ?? s.power.estimatedMw;
+  const cells: [string, string][] = [
+    ["MW", mw != null ? mw.toLocaleString() : "?"],
+    ["KV", s.power.substationKv != null ? String(s.power.substationKv) : "?"],
+    ["LINE MI", s.power.transmissionMi != null ? String(s.power.transmissionMi) : "?"],
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {cells.map(([k, v]) => (
+        <div key={k} className="rounded-sm bg-elevated/50 px-1.5 py-1 text-center">
+          <div className="font-mono text-[12px] font-bold tabular-nums text-bone">{v}</div>
+          <div className="font-mono text-[7.5px] tracking-[0.2em] text-muted">{k}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EvidenceBar({ b }: { b: Record<CiBadge, number> }) {
+  const total = Math.max(1, b.VERIFIED + b.REPORTED + b.INFERRED + b.STALE);
+  const segs: [CiBadge, string][] = [["VERIFIED", "#10B981"], ["REPORTED", "#06B6D4"], ["INFERRED", "#F59E0B"], ["STALE", "#EF4444"]];
+  return (
+    <div title={segs.map(([k]) => `${b[k]} ${k.toLowerCase()}`).join(" · ")}>
+      <div className="flex h-1.5 overflow-hidden rounded-sm bg-elevated">
+        {segs.map(([k, c]) => (b[k] ? <span key={k} style={{ width: `${(b[k] / total) * 100}%`, background: c }} /> : null))}
+      </div>
+      <div className="mt-0.5 flex justify-between font-mono text-[8px] text-muted">
+        <span className="text-status-green">{b.VERIFIED} VERIFIED</span>
+        <span className="text-status-amber">{b.INFERRED} EST</span>
+      </div>
+    </div>
+  );
+}
+
+function Overview({ sites, onOpen }: { sites: SiteIntel[]; onOpen: (id: string) => void }) {
+  const plants = sites.filter((i) => i.site.existingUse === "power_plant" || i.site.power.onsiteGenerationMw != null);
+  const byFuel = new Map<Fuel, number>();
+  for (const i of plants) byFuel.set(fuelOf(i.site), (byFuel.get(fuelOf(i.site)) ?? 0) + (i.site.power.onsiteGenerationMw ?? 0));
+  const fuelSlices = [...byFuel.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([f, v]) => ({ label: FUEL[f].label, value: Math.round(v), color: FUEL[f].color }));
+  const totalMw = fuelSlices.reduce((t, x) => t + x.value, 0);
+  const byCounty = new Map<string, number>();
+  for (const i of plants) byCounty.set(i.site.county || "?", (byCounty.get(i.site.county || "?") ?? 0) + (i.site.power.onsiteGenerationMw ?? 0));
+  const counties = [...byCounty.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value]) => ({ label, value: Math.round(value) }));
+  const flood = { high: sites.filter((i) => /^(A|AE|V)/i.test(i.site.floodZone ?? "")).length, low: sites.filter((i) => i.site.floodZone && !/^(A|AE|V)/i.test(i.site.floodZone)).length };
+  const unknownFlood = sites.length - flood.high - flood.low;
+  const kv500 = sites.filter((i) => (i.site.power.substationKv ?? 0) >= 450 && i.site.existingUse === "substation").length;
+  const top = sites[0];
+  const next = sites.slice(1, 5);
+  const Label = ({ children }: { children: ReactNode }) => <div className="mb-1.5 font-mono text-[9px] tracking-[0.28em] text-muted">{children}</div>;
+  if (!top) return <p className="p-6 text-[12px] text-ash">No sites yet. The weekly infrastructure feed fills this board.</p>;
+  return (
+    <div className="grid gap-4 p-3">
+      <div>
+        <Label>#1 RIGHT NOW</Label>
+        <button onClick={() => onOpen(top.site.id)} className="group block w-full overflow-hidden rounded border border-gold/40 text-left hover:border-gold">
+          <SatFrame site={top.site} className="w-full">
+            <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 bg-gradient-to-t from-[#02040A] via-[#02040A]/80 to-transparent px-3 pb-2.5 pt-10">
+              <div className="min-w-0 flex-1">
+                <FuelChip fuel={fuelOf(top.site)} />
+                <div className="mt-1 truncate font-display text-lg font-bold text-bone">{cleanName(top.site.name)}</div>
+                <div className="truncate text-[11px] text-ash">
+                  {top.site.county} County · {(top.site.power.onsiteGenerationMw ?? top.site.power.estimatedMw ?? 0).toLocaleString()} MW · {top.why[0] ?? ""}
+                </div>
+              </div>
+              <ScoreRing value={top.score} size={60} stroke={5} sub="SCORE" />
+            </div>
+          </SatFrame>
+        </button>
+        <div className="mt-2 grid grid-cols-4 gap-1.5">
+          {next.map((i) => (
+            <button key={i.site.id} onClick={() => onOpen(i.site.id)} className="overflow-hidden rounded border border-elevated/70 text-left hover:border-cyan/50" title={i.site.name}>
+              <SatFrame site={i.site} compact>
+                <span className="absolute right-1 top-1 rounded-sm bg-[#02040A]/85 px-1 font-mono text-[10px] font-bold text-bone">{i.score}</span>
+              </SatFrame>
+              <div className="truncate px-1 py-0.5 text-[9px] text-ash">{cleanName(i.site.name)}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {totalMw > 0 && (
+        <div>
+          <Label>GENERATION ON THE MAP · BY FUEL</Label>
+          <div className="flex items-center gap-3">
+            <Donut slices={fuelSlices} center={totalMw >= 1000 ? `${(totalMw / 1000).toFixed(1)}` : String(totalMw)} unit={totalMw >= 1000 ? "GW" : "MW"} />
+            <Legend items={fuelSlices.slice(0, 7).map((x) => ({ label: x.label, value: `${Math.round((x.value / totalMw) * 100)}%`, color: x.color }))} />
+          </div>
+        </div>
+      )}
+
+      {counties.length > 0 && (
+        <div>
+          <Label>WHERE THE MEGAWATTS SIT · TOP COUNTIES</Label>
+          <HBars rows={counties} unit="MW" />
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <Label>SCORE SPREAD · {sites.length} NODES</Label>
+          <Histogram values={sites.map((i) => i.score)} highlight={top.score} />
+        </div>
+        <div className="min-w-0">
+          <Label>FLOOD EXPOSURE</Label>
+          <div className="flex h-3 overflow-hidden rounded-sm bg-elevated">
+            <span style={{ width: `${(flood.low / sites.length) * 100}%` }} className="bg-status-green/70" />
+            <span style={{ width: `${(flood.high / sites.length) * 100}%` }} className="bg-status-red" />
+          </div>
+          <ul className="mt-1.5 grid gap-0.5 text-[10px]">
+            <li className="flex justify-between"><span className="text-ash">Outside flood zone</span><span className="font-mono text-status-green">{flood.low}</span></li>
+            <li className="flex justify-between"><span className="text-ash">In FEMA zone A / AE</span><span className="font-mono text-status-red">{flood.high}</span></li>
+            {unknownFlood > 0 && <li className="flex justify-between"><span className="text-ash">Not mapped</span><span className="font-mono text-muted">{unknownFlood}</span></li>}
+          </ul>
+          <div className="mt-2 font-mono text-[9px] tracking-[0.2em] text-muted">500 kV BACKBONE</div>
+          <div className="font-mono text-lg font-bold text-gold">{kv500} <span className="text-[10px] font-normal text-ash">substations</span></div>
         </div>
       </div>
     </div>

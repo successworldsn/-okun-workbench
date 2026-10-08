@@ -58,7 +58,7 @@ const bin = (n) => join(root, "node_modules", ".bin", n);
 /** Real feed output → the slice the page carries (leads + comp pool), analyzed with the same engine. */
 async function realData() {
   if (!dataPath) return null;
-  if (app === "capital") return JSON.parse(await readFile(dataPath, "utf8")); // public infra feed, carried whole
+  if (app === "capital") return capitalData(); // public infra feed, carried whole with its photos and grid
   const { analyzeAll, isUsableSale } = await import("../../src/lib/re-intel.ts");
   const j = JSON.parse(await readFile(dataPath, "utf8"));
   const now = new Date();
@@ -68,6 +68,33 @@ async function realData() {
   const props = [...j.properties.filter((p) => leadIds.has(p.id)), ...pool];
   console.log(`data: ${leadIds.size} leads + ${pool.length} comp sales of ${j.properties.length} properties`);
   return { generatedAt: j.generatedAt, sources: j.sources ?? [], market: j.market ?? {}, properties: props, total: j.properties.length };
+}
+
+/** Capital feed + grid, with each satellite photo recompressed (ImageMagick when present) and inlined. */
+async function capitalData() {
+  const j = JSON.parse(await readFile(dataPath, "utf8"));
+  const gridPath = join(dirname(dataPath), `${(j.state ?? "ga").toLowerCase()}-grid.json`);
+  j.grid = await readFile(gridPath, "utf8").then(JSON.parse).catch(() => null);
+  let n = 0, bytes = 0;
+  for (const s of j.sites) {
+    if (!s.media?.sat) continue;
+    const file = join(root, "public", s.media.sat.replace(/^\//, ""));
+    let buf;
+    try {
+      buf = execFileSync("convert", [file, "-resize", "480x300", "-strip", "-quality", "62", "jpg:-"], { maxBuffer: 1 << 24 });
+    } catch {
+      buf = await readFile(file).catch(() => null);
+    }
+    if (!buf) {
+      delete s.media;
+      continue;
+    }
+    s.media.sat = `data:image/jpeg;base64,${buf.toString("base64")}`;
+    n++;
+    bytes += buf.length;
+  }
+  console.log(`capital: ${j.sites.length} sites, ${n} photos (${(bytes / 1e6).toFixed(1)} MB), grid ${j.grid ? j.grid.features.length : 0} features`);
+  return j;
 }
 
 async function main() {

@@ -8,14 +8,14 @@ import type { InfraFeed } from "@/lib/ci-store";
 
 declare const __TERRAIN__: Parameters<typeof embedTerrain>[0];
 /** Present when build.mjs ran with --app capital --data data/public/ga-infra.json. */
-const REAL = (globalThis as unknown as { __GE_DATA__?: InfraFeed }).__GE_DATA__;
+const REAL = (globalThis as unknown as { __GE_DATA__?: InfraFeed & { grid?: GeoJSON.FeatureCollection | null } }).__GE_DATA__;
 
 embedTerrain(__TERRAIN__);
 const now = new Date();
 const root = createRoot(document.getElementById("root")!);
 if (REAL) {
-  const { sites: raw, ...meta } = REAL;
-  root.render(<CapitalDesk sites={analyzeSites(raw, [], [], now)} rawSites={raw} feed={meta} signals={[]} capital={[]} initialDeals={[]} initialMemories={[]} nowIso={now.toISOString()} example={false} />);
+  const { sites: raw, grid, ...meta } = REAL;
+  root.render(<CapitalDesk sites={analyzeSites(raw, [], [], now)} rawSites={raw} feed={meta} grid={grid ?? null} signals={[]} capital={[]} initialDeals={[]} initialMemories={[]} nowIso={now.toISOString()} example={false} />);
 } else {
   const signals = demoSignals(now);
   const capital = demoCapital(now);
