@@ -9,6 +9,7 @@ import { nextAction, applyActivity, type ActivityKind, type Outcome, type Stage,
 import { draftOutreach, planFor, COMPLIANCE, type Channel } from "@/lib/re-outreach";
 import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
 import { demoBuyers } from "@/lib/re-intel-demo";
+import type { Contract } from "@/lib/re-contract";
 
 let registry = new Map<string, Intel>();
 export function registerIntel(all: Intel[]) {
@@ -89,4 +90,30 @@ export async function importBuyers(csv: string): Promise<{ buyers: Buyer[]; adde
   const list = [...buyers, ...loadBuyers()];
   storeBuyers(list);
   return { buyers: list, added: buyers.length, errors };
+}
+
+const CKEY = "godseye-preview-contracts-v1";
+export function loadContracts(): Contract[] {
+  try {
+    const j = JSON.parse(localStorage.getItem(CKEY) ?? "null");
+    if (Array.isArray(j)) return j;
+  } catch {
+    /* storage unavailable */
+  }
+  return [];
+}
+export async function saveContract(c: Contract, statusChanged: boolean): Promise<{ contracts: Contract[]; state: DeskState | null }> {
+  const list = loadContracts().filter((x) => x.parcelId !== c.parcelId);
+  list.unshift({ ...c, updatedAt: new Date().toISOString() });
+  try {
+    localStorage.setItem(CKEY, JSON.stringify(list));
+  } catch {
+    /* storage unavailable */
+  }
+  let state: DeskState | null = null;
+  if (statusChanged) {
+    const stage: Stage = c.status === "active" ? "CONTRACT" : c.status === "closed" ? "CLOSED" : "NEGOTIATION";
+    state = await logTouch({ parcelId: c.parcelId, kind: "stage", outcome: null, stage, amount: c.status === "closed" ? c.assignmentFee ?? null : null, note: c.status === "active" ? `Under contract at $${c.contractPrice.toLocaleString("en-US")}` : c.status === "closed" ? "Closed" : "Contract cancelled" });
+  }
+  return { contracts: list, state };
 }

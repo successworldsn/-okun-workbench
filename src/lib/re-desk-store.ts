@@ -9,6 +9,7 @@ import { DEMO_MODE, db } from "./supabase";
 import type { MarketContext, PropertyRecord } from "./re-intel";
 import { demoBuyers, demoMarket, demoProperties } from "./re-intel-demo";
 import type { Buyer } from "./re-buyers";
+import type { Contract } from "./re-contract";
 import { applyActivity, type Activity, type DeskState } from "./re-desk";
 
 export interface FeedSource {
@@ -164,5 +165,27 @@ export async function saveBuyers(buyers: Buyer[]): Promise<void> {
     .from("re_buyers")
     .upsert(buyers.map((b) => ({ id: b.id, data: b, active: b.active, updated_at: b.updatedAt })));
   if (isMissingTable(error)) throw new Error("Buyer table not set up: apply the re_buyers section of schema.sql in Supabase.");
+  if (error) throw error;
+}
+
+// ─── Contracts ──────────────────────────────────────────────────────────────
+
+const demoContracts = new Map<string, Contract>();
+
+export async function getContracts(): Promise<Contract[]> {
+  if (DEMO_MODE) return [...demoContracts.values()];
+  const { data, error } = await db().from("re_contracts").select("data");
+  if (isMissingTable(error)) return [];
+  if (error) throw error;
+  return (data as { data: Contract }[]).map((r) => r.data);
+}
+
+export async function putContract(c: Contract): Promise<void> {
+  if (DEMO_MODE) {
+    demoContracts.set(c.parcelId, c);
+    return;
+  }
+  const { error } = await db().from("re_contracts").upsert({ parcel_id: c.parcelId, data: c, status: c.status, updated_at: c.updatedAt });
+  if (isMissingTable(error)) throw new Error("Contract table not set up: apply the re_contracts section of schema.sql in Supabase.");
   if (error) throw error;
 }

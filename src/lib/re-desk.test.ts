@@ -110,3 +110,10 @@ test("today briefing: due follow-ups, new signals, top untouched", () => {
   assert.equal(b.daysToSale, 26);
   assert.equal(b.touchedYesterday, 1);
 });
+
+test("properties under contract leave the calling queue and say WORK CONTRACT", () => {
+  const id = all[0].p.id;
+  const st = applyActivity(undefined, { id: "c", parcelId: id, at: NOW.toISOString(), kind: "stage", outcome: null, stage: "CONTRACT" });
+  assert.ok(!buildQueue(all, { [id]: st }, NOW).some((q) => q.intel.p.id === id));
+  assert.equal(nextAction(all[0], st, NOW).verb, "WORK CONTRACT");
+});

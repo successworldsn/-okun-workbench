@@ -105,12 +105,13 @@ export function applyActivity(state: DeskState | undefined, a: Activity): DeskSt
 // ─── Next action ────────────────────────────────────────────────────────────
 
 export interface NextAction {
-  verb: "CALL NOW" | "CALL" | "SEND LETTER" | "RESEARCH" | "VERIFY ZONING" | "FOLLOW UP" | "SKIP TRACE" | "NEGOTIATE" | "WAIT";
+  verb: "CALL NOW" | "CALL" | "SEND LETTER" | "RESEARCH" | "VERIFY ZONING" | "FOLLOW UP" | "SKIP TRACE" | "NEGOTIATE" | "WORK CONTRACT" | "WAIT";
   why: string;
 }
 
 export function nextAction(i: Intel, s: DeskState | undefined, now: Date): NextAction {
   const stage = s?.stage ?? "DISCOVERED";
+  if (stage === "CONTRACT") return { verb: "WORK CONTRACT", why: "Under contract: deadlines and checklist on the CONTRACT tab" };
   if (s?.nextFollowUp && new Date(s.nextFollowUp) <= now && OPEN_STAGES.includes(stage))
     return { verb: "FOLLOW UP", why: `Follow-up due ${s.nextFollowUp.slice(0, 10)}` };
   if (stage === "NEGOTIATION" || stage === "OPPORTUNITY") return { verb: "NEGOTIATE", why: "Owner is engaged: work the numbers" };
@@ -152,6 +153,7 @@ export function buildQueue(all: Intel[], states: Record<string, DeskState>, now:
     .filter((q) => {
       const st = q.state;
       if (st && !OPEN_STAGES.includes(st.stage)) return false;
+      if (st?.stage === "CONTRACT") return false; // worked from contract deadlines, not the calling queue
       if (st?.snoozedUntil && new Date(st.snoozedUntil) > now) return false;
       return q.action.verb !== "WAIT";
     });

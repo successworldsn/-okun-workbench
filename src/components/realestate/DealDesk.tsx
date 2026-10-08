@@ -7,7 +7,7 @@
  */
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { MISSIONS, SOURCES, STRATEGY_LABELS, badge, chooseRent, type Badge, type Evidence, type Intel, type MarketContext, type Mission } from "@/lib/re-intel";
 import {
   STAGES,
@@ -28,15 +28,19 @@ import {
 } from "@/lib/re-desk";
 import type { FeedSource } from "@/lib/re-desk-store";
 import type { Channel } from "@/lib/re-outreach";
-import { askOracle, draftMessage, logTouch, saveBuyer, importBuyers } from "@/app/realestate/actions";
+import { askOracle, draftMessage, logTouch, saveBuyer, importBuyers, saveContract } from "@/app/realestate/actions";
+import { buildOffer, offerLetter, DEFAULT_OFFER, type OfferSettings } from "@/lib/re-offer";
+import { newContract, deadlines, progress, upcomingDeadlines, type Contract, type Severity } from "@/lib/re-contract";
 import { matchBuyers, dealSheet, PROP_TYPE_LABELS, BUYER_STRATEGIES, type Buyer, type BuyerMatch, type PropType } from "@/lib/re-buyers";
 import type { Basemap, MapPoint } from "./GodsEyeMap";
 
 const GodsEyeMap = dynamic(() => import("./GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
 type View = "today" | "desk" | "pipeline" | "buyers" | "money" | "sources";
-type Tab = "OWNER" | "PROPERTY" | "MONEY" | "ZONING" | "COMPS" | "CONTACT" | "BUYERS" | "ACTION";
-const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "ZONING", "COMPS", "CONTACT", "BUYERS", "ACTION"];
+type Tab = "OWNER" | "PROPERTY" | "MONEY" | "OFFER" | "ZONING" | "COMPS" | "CONTACT" | "BUYERS" | "CONTRACT" | "ACTION";
+const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "OFFER", "ZONING", "COMPS", "CONTACT", "BUYERS", "CONTRACT", "ACTION"];
+const SEV_CLS: Record<Severity, string> = { done: "text-status-green", overdue: "text-status-red", red: "text-status-red", amber: "text-status-amber", ok: "text-ash" };
+const OFFER_KEY = "godseye-offer-settings-v1";
 
 const money = (v: number | null | undefined) => (v == null || !isFinite(v) ? "—" : (v < 0 ? "−" : "") + "$" + Math.round(Math.abs(v)).toLocaleString("en-US"));
 const kmoney = (v: number | null | undefined) =>
@@ -96,6 +100,7 @@ export function DealDesk({
   initialStates,
   initialActivity,
   initialBuyers,
+  initialContracts,
   meta,
   market,
   nowIso,
@@ -106,6 +111,7 @@ export function DealDesk({
   initialStates: Record<string, DeskState>;
   initialActivity: Activity[];
   initialBuyers: Buyer[];
+  initialContracts: Contract[];
   meta: { example: boolean; generatedAt: string; sources: FeedSource[]; note?: string };
   market: Record<string, MarketContext>;
   nowIso: string;
@@ -116,6 +122,26 @@ export function DealDesk({
   const [states, setStates] = useState(initialStates);
   const [activity, setActivity] = useState(initialActivity);
   const [buyers, setBuyers] = useState(initialBuyers);
+  const [contracts, setContracts] = useState(initialContracts);
+  const [offerSettings, setOfferSettingsState] = useState<OfferSettings>(DEFAULT_OFFER);
+  useEffect(() => {
+    // Loaded after mount so the server render and the first client render match.
+    try {
+      setOfferSettingsState({ ...DEFAULT_OFFER, ...JSON.parse(localStorage.getItem(OFFER_KEY) ?? "{}") });
+    } catch {
+      /* storage unavailable: defaults */
+    }
+  }, []);
+  const setOfferSettings = (o: OfferSettings) => {
+    setOfferSettingsState(o);
+    try {
+      localStorage.setItem(OFFER_KEY, JSON.stringify(o));
+    } catch {
+      /* storage unavailable: settings last for this visit */
+    }
+  };
+  const contractFor = useMemo(() => new Map(contracts.map((c) => [c.parcelId, c])), [contracts]);
+  const dueSoon = useMemo(() => upcomingDeadlines(contracts, now, 7), [contracts, now]);
   const [mission, setMission] = useState<Mission | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("today");
@@ -212,6 +238,23 @@ export function DealDesk({
     }
   }
 
+  function persistContract(c: Contract, statusChanged: boolean) {
+    setContracts((list) => [c, ...list.filter((x) => x.parcelId !== c.parcelId)]);
+    start(async () => {
+      try {
+        const r = await saveContract(c, statusChanged);
+        setContracts(r.contracts);
+        if (r.state) {
+          setStates((s) => ({ ...s, [c.parcelId]: r.state! }));
+          setActivity((a) => [{ id: `local-${Date.now()}`, parcelId: c.parcelId, at: new Date().toISOString(), kind: "stage", outcome: null, stage: r.state!.stage, note: c.status === "active" ? "Under contract" : c.status === "closed" ? "Closed" : "Contract cancelled" }, ...a]);
+          flash(`${c.address}: ${r.state.stage}`);
+        }
+      } catch (e) {
+        flash(`Not saved: ${(e as Error).message}`);
+      }
+    });
+  }
+
   // ─── Header ───
   const header = (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-cyan/20 bg-[#03060D]/95 px-3 font-mono text-[11px] tracking-widest text-ash">
@@ -303,6 +346,10 @@ export function DealDesk({
       key={sel.p.id}
       i={sel}
       buyerMatch={buyerMatches.get(sel.p.id) ?? { matches: [], nearMisses: [] }}
+      contract={contractFor.get(sel.p.id) ?? null}
+      onContract={persistContract}
+      offerSettings={offerSettings}
+      setOfferSettings={setOfferSettings}
       state={selState}
       action={selAction!}
       acts={selActivity}
@@ -377,8 +424,8 @@ export function DealDesk({
           )}
           {view !== "desk" && (
             <div className="absolute inset-0 z-10 overflow-y-auto bg-[#02040A]/92 p-4 backdrop-blur-sm">
-              {view === "today" && <TodayView brief={brief} onOpen={select} />}
-              {view === "pipeline" && <Pipeline intel={intel} states={states} onOpen={select} />}
+              {view === "today" && <TodayView brief={brief} onOpen={select} deadlines={dueSoon} />}
+              {view === "pipeline" && <Pipeline intel={intel} states={states} onOpen={select} contracts={contractFor} now={now} />}
               {view === "buyers" && (
                 <BuyersView
                   buyers={buyers}
@@ -407,7 +454,7 @@ export function DealDesk({
                   }
                 />
               )}
-              {view === "money" && <MoneyView stats={stats} buyers={buyers.filter((b) => b.active).length} matched={intel.filter((i) => (buyerMatches.get(i.p.id)?.matches.length ?? 0) > 0).length} />}
+              {view === "money" && <MoneyView stats={stats} feesUnderContract={contracts.filter((c) => c.status === "active").reduce((s, c) => s + (c.assignmentFee ?? 0), 0)} buyers={buyers.filter((b) => b.active).length} matched={intel.filter((i) => (buyerMatches.get(i.p.id)?.matches.length ?? 0) > 0).length} />}
               {view === "sources" && <SourcesView meta={meta} now={now} shown={intel.length} total={totalProperties} />}
             </div>
           )}
@@ -446,6 +493,10 @@ export function DealDesk({
 function Dossier(props: {
   i: Intel;
   buyerMatch: { matches: BuyerMatch[]; nearMisses: BuyerMatch[] };
+  contract: Contract | null;
+  onContract: (c: Contract, statusChanged: boolean) => void;
+  offerSettings: OfferSettings;
+  setOfferSettings: (o: OfferSettings) => void;
   state: DeskState | undefined;
   action: { verb: string; why: string };
   acts: Activity[];
@@ -466,6 +517,9 @@ function Dossier(props: {
   const { i, state, action, tab, setTab, now } = props;
   const [closing, setClosing] = useState(false);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [showLetter, setShowLetter] = useState(false);
+  const offer = useMemo(() => buildOffer(i, props.buyerMatch.matches, props.offerSettings), [i, props.buyerMatch, props.offerSettings]);
+  const [draftC, setDraftC] = useState<Contract | null>(null);
   const [closeAmt, setCloseAmt] = useState("");
   const p = i.p;
   const pr = priority(i.score);
@@ -748,6 +802,91 @@ function Dossier(props: {
               <ContactLog acts={props.acts} />
             </>
           )}
+          {tab === "OFFER" && (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <Stat k="Opening" v={money(offer.opening)} />
+                <Stat k="Target" v={money(offer.target)} />
+                <Stat k="Walk-away" v={money(offer.walkAway)} />
+              </div>
+              <div className={`mt-2 rounded border p-2 text-[11px] ${offer.feasible === "yes" ? "border-status-green/40 text-status-green" : offer.feasible === "tight" ? "border-status-amber/40 text-status-amber" : offer.feasible === "no" ? "border-status-red/40 text-status-red" : "border-elevated text-ash"}`}>
+                {offer.feasible === "yes" ? "✓ " : offer.feasible === "no" ? "✕ " : offer.feasible === "tight" ? "◐ " : "? "}
+                {offer.verdict}
+              </div>
+              <table className="mt-2 w-full text-[11px]">
+                <tbody>
+                  {offer.lines.map((l) => (
+                    <tr key={l.label} className="border-b border-elevated/60 align-top">
+                      <td className="py-1 pr-2 text-bone">
+                        {l.label}
+                        <div className="text-[10px] text-muted">{l.basis}</div>
+                      </td>
+                      <td className="py-1 text-right font-mono text-bone">{money(l.value)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-b border-elevated/60 align-top">
+                    <td className="py-1 pr-2 text-bone">
+                      Seller must clear
+                      <div className="text-[10px] text-muted">{offer.sellerFloorBasis}</div>
+                    </td>
+                    <td className="py-1 text-right font-mono text-bone">{money(offer.sellerFloor)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="mt-3 font-mono text-[9px] tracking-[0.25em] text-muted">SELLER&apos;S CHOICE (WHAT THEY POCKET)</div>
+              <Rows
+                rows={[
+                  ["Your offer at target", money(offer.netAtTarget)],
+                  ["Listing it as-is", money(offer.retailNet)],
+                ]}
+                foot={`Listing: ${offer.retailNetBasis}. Your offer: target − payoff − back taxes, you pay closing. Use this to explain your number, not to pressure anyone.`}
+              />
+              <details className="mt-2 text-[11px]">
+                <summary className="cursor-pointer font-mono text-[10px] tracking-wider text-cyan">YOUR OFFER RULES</summary>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ["minFee", "Minimum fee $", 1],
+                      ["targetFee", "Target fee $", 1],
+                      ["bufferPct", "Closing buffer %", 100],
+                      ["openingDiscountPct", "Opening below target %", 100],
+                    ] as const
+                  ).map(([k, l, mult]) => (
+                    <label key={k} className="text-[10px] text-muted">
+                      {l}
+                      <input
+                        id={`of-${k}`}
+                        inputMode="decimal"
+                        value={Math.round(props.offerSettings[k] * mult * 100) / 100}
+                        onChange={(e) => {
+                          const v = Number(e.target.value.replace(/[$,%\s]/g, ""));
+                          if (isFinite(v)) props.setOfferSettings({ ...props.offerSettings, [k]: v / mult });
+                        }}
+                        className="w-full rounded border border-elevated bg-[#02040A] px-2 py-1 font-mono text-bone"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </details>
+              <button onClick={() => setShowLetter(!showLetter)} className="mt-2 rounded border border-cyan/30 px-2 py-1 font-mono text-[10px] tracking-wider text-cyan hover:bg-cyan/10">
+                OFFER LETTER (LOI)
+              </button>
+              {showLetter && <textarea readOnly value={offerLetter(i, offer)} rows={14} onFocus={(e) => e.currentTarget.select()} className="mt-2 w-full rounded border border-elevated bg-[#02040A] p-2 font-mono text-[11px] text-bone" />}
+              <p className="mt-2 text-[10px] text-muted">The letter is non-binding. Use an attorney-prepared Georgia purchase agreement for the real contract.</p>
+            </>
+          )}
+          {tab === "CONTRACT" && (
+            <ContractPanel
+              i={i}
+              contract={props.contract}
+              draft={draftC}
+              setDraft={setDraftC}
+              suggestedPrice={offer.target}
+              matches={props.buyerMatch.matches}
+              now={now}
+              onSave={props.onContract}
+            />
+          )}
           {tab === "BUYERS" && (
             <>
               {!props.buyerMatch.matches.length && <p className="text-[11px] text-muted">No buyer on file matches every criterion. Near misses below; add buyers under Buyers.</p>}
@@ -911,7 +1050,7 @@ function ContactLog({ acts }: { acts: Activity[] }) {
 
 // ─── Pipeline / Money / Sources ───────────────────────────────────────────────
 
-function TodayView({ brief, onOpen }: { brief: ReturnType<typeof todayBrief>; onOpen: (id: string) => void }) {
+function TodayView({ brief, onOpen, deadlines: due }: { brief: ReturnType<typeof todayBrief>; onOpen: (id: string) => void; deadlines: ReturnType<typeof upcomingDeadlines> }) {
   const start = brief.due[0]?.intel ?? brief.top[0]?.intel;
   const when = new Date(`${brief.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
   const tiles: [string, string, string][] = [
@@ -919,6 +1058,7 @@ function TodayView({ brief, onOpen }: { brief: ReturnType<typeof todayBrief>; on
     ["New signals · 7 days", String(brief.newSignals.length), "untouched properties"],
     ["Next foreclosure sale", brief.saleDate.slice(5).replace("-", "/"), `${brief.daysToSale} days · first Tuesday`],
     ["Probate · 90 days", String(brief.probate.length), "estates with real property"],
+    ["Contract deadlines", String(due.length), due.length ? `next: ${due[0].label.toLowerCase()} ${due[0].daysLeft < 0 ? "OVERDUE" : `in ${due[0].daysLeft}d`}` : "none in 7 days"],
   ];
   const Row = ({ i, tag }: { i: Intel; tag: string }) => (
     <li>
@@ -936,7 +1076,24 @@ function TodayView({ brief, onOpen }: { brief: ReturnType<typeof todayBrief>; on
         {brief.due.length + brief.top.length} on the desk today
         {brief.touchedYesterday ? <span className="ml-2 text-sm font-normal text-ash">· {brief.touchedYesterday} touches in the last 24 h</span> : null}
       </h2>
-      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+      {due.length > 0 && (
+        <div className="mt-4 rounded border border-status-red/30 bg-status-red/5 p-2">
+          <div className="font-mono text-[9px] tracking-[0.25em] text-status-red">CONTRACT DEADLINES · NEXT 7 DAYS</div>
+          <ul className="mt-1">
+            {due.map((d) => (
+              <li key={d.contract.parcelId + d.key}>
+                <button onClick={() => onOpen(d.contract.parcelId)} className="flex w-full items-baseline gap-3 rounded px-2 py-1 text-left text-[12px] hover:bg-elevated/70">
+                  <span className={`w-20 font-mono text-[11px] font-bold ${SEV_CLS[d.severity]}`}>{d.daysLeft < 0 ? `${-d.daysLeft}d LATE` : d.daysLeft === 0 ? "TODAY" : `${d.daysLeft}d`}</span>
+                  <span className="text-bone">{d.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-ash">{d.contract.address}</span>
+                  <span className="font-mono text-[10px] text-muted">{d.date}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
         {tiles.map(([k, v, sub]) => (
           <div key={k} className="rounded border border-cyan/15 bg-[#050912] p-3">
             <div className="font-mono text-[9px] tracking-[0.2em] text-muted">{k.toUpperCase()}</div>
@@ -1127,7 +1284,147 @@ function BuyersView({ buyers, counts, pending, onSave, onImport }: { buyers: Buy
   );
 }
 
-function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<string, DeskState>; onOpen: (id: string) => void }) {
+function ContractPanel({ i, contract, draft, setDraft, suggestedPrice, matches, now, onSave }: { i: Intel; contract: Contract | null; draft: Contract | null; setDraft: (c: Contract | null) => void; suggestedPrice: number | null; matches: BuyerMatch[]; now: Date; onSave: (c: Contract, statusChanged: boolean) => void }) {
+  const c = draft ?? contract;
+  const inp = "w-full rounded border border-elevated bg-[#02040A] px-2 py-1 font-mono text-[12px] text-bone";
+  const num = (v: string) => Number(v.replace(/[$,\s]/g, "")) || 0;
+  if (!c)
+    return (
+      <div>
+        <p className="text-[11px] text-ash">Not under contract. When the seller signs, start the tracker: it watches earnest money, the due-diligence window and closing, and runs the Georgia assignment checklist.</p>
+        <button onClick={() => setDraft(newContract(i.p.id, i.p.address, suggestedPrice ?? 0, now))} className="mt-2 rounded bg-gold/20 px-3 py-1.5 font-mono text-[10px] tracking-widest text-gold hover:bg-gold/30">
+          + START CONTRACT{suggestedPrice ? ` AT ${money(suggestedPrice)}` : ""}
+        </button>
+      </div>
+    );
+  const editing = !!draft;
+  const set = (patch: Partial<Contract>) => setDraft({ ...c, ...patch });
+  const dl = deadlines(c, now);
+  const fee = c.assignmentFee ?? null;
+  return (
+    <div>
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono text-[9px] tracking-[0.25em] text-gold">{c.status === "active" ? "UNDER CONTRACT" : c.status.toUpperCase()}</span>
+        <span className="font-mono text-[11px] text-bone">{money(c.contractPrice)}</span>
+        <span className="ml-auto font-mono text-[10px] text-ash">{progress(c)}% done</span>
+      </div>
+      <ul className="mt-2 space-y-1">
+        {dl.map((d) => (
+          <li key={d.key} className="flex items-baseline gap-2 text-[11px]">
+            <span className={`w-16 font-mono font-bold ${SEV_CLS[d.severity]}`}>{d.severity === "done" ? "✓" : d.daysLeft < 0 ? `${-d.daysLeft}d LATE` : d.daysLeft === 0 ? "TODAY" : `${d.daysLeft}d`}</span>
+            <span className="text-bone">{d.label}</span>
+            <span className="font-mono text-muted">{d.date}</span>
+            <span className="min-w-0 flex-1 truncate text-right text-[10px] text-ash">{d.note}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-muted">
+        <label>
+          Contract price $<input id="ct-price" disabled={!editing} value={c.contractPrice} onChange={(e) => set({ contractPrice: num(e.target.value) })} className={inp} />
+        </label>
+        <label>
+          Earnest money $<input id="ct-emd" disabled={!editing} value={c.emd} onChange={(e) => set({ emd: num(e.target.value) })} className={inp} />
+        </label>
+        <label>
+          Binding date<input id="ct-eff" type="date" disabled={!editing} value={c.effectiveDate} onChange={(e) => set({ effectiveDate: e.target.value })} className={inp} />
+        </label>
+        <label>
+          Closing date<input id="ct-close" type="date" disabled={!editing} value={c.closingDate} onChange={(e) => set({ closingDate: e.target.value })} className={inp} />
+        </label>
+        <label>
+          EMD due (days)<input id="ct-emdd" disabled={!editing} value={c.emdDueDays} onChange={(e) => set({ emdDueDays: num(e.target.value) })} className={inp} />
+        </label>
+        <label>
+          Due diligence (days)<input id="ct-dd" disabled={!editing} value={c.ddDays} onChange={(e) => set({ ddDays: num(e.target.value) })} className={inp} />
+        </label>
+        <label className="col-span-2">
+          Closing attorney<input id="ct-atty" disabled={!editing} value={c.closingAttorney ?? ""} onChange={(e) => set({ closingAttorney: e.target.value })} className={inp} />
+        </label>
+        <label>
+          Assigned buyer
+          <select
+            id="ct-buyer"
+            disabled={!editing}
+            value={c.buyerId ?? ""}
+            onChange={(e) => {
+              const m = matches.find((x) => x.buyer.id === e.target.value);
+              set({ buyerId: m?.buyer.id ?? null, buyerName: m?.buyer.name ?? null, assignmentFee: c.assignmentFee ?? (m?.price != null ? Math.max(0, m.price - c.contractPrice) : null) });
+            }}
+            className={inp}
+          >
+            <option value="">— none yet —</option>
+            {matches.map((m) => (
+              <option key={m.buyer.id} value={m.buyer.id}>
+                {m.buyer.name} (fit {m.fit})
+              </option>
+            ))}
+            {c.buyerId && !matches.some((m) => m.buyer.id === c.buyerId) && <option value={c.buyerId}>{c.buyerName}</option>}
+          </select>
+        </label>
+        <label>
+          Assignment fee $<input id="ct-fee" disabled={!editing} value={fee ?? ""} onChange={(e) => set({ assignmentFee: num(e.target.value) })} className={inp} />
+        </label>
+      </div>
+      <div className="mt-3 font-mono text-[9px] tracking-[0.25em] text-muted">GEORGIA ASSIGNMENT CHECKLIST</div>
+      <ul className="mt-1 space-y-0.5">
+        {c.checklist.map((x, n) => (
+          <li key={x.label}>
+            <label className="flex items-start gap-2 text-[11px]">
+              <input
+                id={`ct-ck-${n}`}
+                type="checkbox"
+                checked={x.done}
+                onChange={() => {
+                  const next = { ...c, checklist: c.checklist.map((y, k) => (k === n ? { ...y, done: !y.done } : y)) };
+                  if (editing) setDraft(next);
+                  else onSave(next, false);
+                }}
+              />
+              <span className={x.done ? "text-muted line-through" : "text-bone"}>{x.label}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-wrap gap-1 font-mono text-[10px] tracking-wider">
+        {editing ? (
+          <>
+            <button
+              onClick={() => {
+                onSave(draft!, !contract || contract.status !== draft!.status);
+                setDraft(null);
+              }}
+              className="rounded bg-gold/20 px-3 py-1 text-gold hover:bg-gold/30"
+            >
+              SAVE CONTRACT
+            </button>
+            <button onClick={() => setDraft(null)} className="rounded border border-elevated px-3 py-1 text-ash">
+              CANCEL
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setDraft({ ...c })} className="rounded border border-cyan/30 px-3 py-1 text-cyan hover:bg-cyan/10">
+              EDIT
+            </button>
+            {c.status === "active" && (
+              <>
+                <button onClick={() => onSave({ ...c, status: "closed", checklist: c.checklist.map((x) => ({ ...x, done: true })) }, true)} className="rounded bg-status-green/15 px-3 py-1 text-status-green">
+                  ✓ MARK CLOSED{fee ? ` · ${money(fee)}` : ""}
+                </button>
+                <button onClick={() => onSave({ ...c, status: "cancelled" }, true)} className="rounded border border-status-red/40 px-3 py-1 text-status-red">
+                  CANCEL CONTRACT
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] text-muted">Deadlines count calendar days from the binding date; check your contract&apos;s own definitions. Georgia closings run through a closing attorney.</p>
+    </div>
+  );
+}
+
+function Pipeline({ intel, states, onOpen, contracts, now }: { intel: Intel[]; states: Record<string, DeskState>; onOpen: (id: string) => void; contracts: Map<string, Contract>; now: Date }) {
   const cols = STAGES.filter((s) => s !== "DEAD");
   return (
     <div>
@@ -1146,6 +1443,16 @@ function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<st
                   <li key={i.p.id}>
                     <button onClick={() => onOpen(i.p.id)} className="w-full rounded bg-elevated/50 px-2 py-1 text-left text-[11px] hover:bg-elevated">
                       <span className="font-mono text-cyan">{i.score}</span> {i.p.address}
+                      {s === "CONTRACT" && contracts.get(i.p.id) && (() => {
+                        const c = contracts.get(i.p.id)!;
+                        const d = deadlines(c, now).find((x) => x.severity !== "done");
+                        return (
+                          <span className="block font-mono text-[9px]">
+                            <span className="text-ash">{progress(c)}% · </span>
+                            {d ? <span className={SEV_CLS[d.severity]}>{d.label.toLowerCase()} {d.daysLeft < 0 ? "OVERDUE" : `${d.daysLeft}d`}</span> : <span className="text-status-green">ready</span>}
+                          </span>
+                        );
+                      })()}
                     </button>
                   </li>
                 ))}
@@ -1159,8 +1466,9 @@ function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<st
   );
 }
 
-function MoneyView({ stats, buyers, matched }: { stats: ReturnType<typeof moneyStats>; buyers: number; matched: number }) {
+function MoneyView({ stats, buyers, matched, feesUnderContract }: { stats: ReturnType<typeof moneyStats>; buyers: number; matched: number; feesUnderContract: number }) {
   const tiles: [string, string][] = [
+    ["Fees under contract", kmoney(feesUnderContract)],
     ["Buyers on file", String(buyers)],
     ["Properties with a buyer", String(matched)],
     ["Opportunities", stats.opportunities.toLocaleString()],

@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { logActivity, loadIntelData, saveBuyers, getBuyers } from "@/lib/re-desk-store";
+import { logActivity, loadIntelData, saveBuyers, getBuyers, putContract, getContracts } from "@/lib/re-desk-store";
+import type { Contract } from "@/lib/re-contract";
 import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
 import { STAGES, nextAction, type ActivityKind, type Outcome, type Stage, type DeskState } from "@/lib/re-desk";
 import { analyze } from "@/lib/re-intel";
@@ -93,4 +94,27 @@ export async function importBuyers(csv: string): Promise<{ buyers: Buyer[]; adde
   if (buyers.length) await saveBuyers(buyers.map(clean));
   revalidatePath("/realestate/command");
   return { buyers: await getBuyers(), added: buyers.length, errors };
+}
+
+const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+/** Save a contract; when its status changes, roll the pipeline stage to match (CONTRACT / CLOSED with the fee / back to NEGOTIATION). */
+export async function saveContract(c: Contract, statusChanged: boolean): Promise<{ contracts: Contract[]; state: DeskState | null }> {
+  if (!(c.contractPrice >= 0) || !isDate(c.effectiveDate) || !isDate(c.closingDate)) throw new Error("Contract needs a price, a binding date and a closing date.");
+  const clean: Contract = { ...c, notes: c.notes?.slice(0, 4000), checklist: c.checklist.slice(0, 40), updatedAt: new Date().toISOString() };
+  await putContract(clean);
+  let state: DeskState | null = null;
+  if (statusChanged) {
+    const stage: Stage = clean.status === "active" ? "CONTRACT" : clean.status === "closed" ? "CLOSED" : "NEGOTIATION";
+    state = await logActivity({
+      parcelId: clean.parcelId,
+      kind: "stage",
+      outcome: null,
+      stage,
+      amount: clean.status === "closed" ? clean.assignmentFee ?? null : null,
+      note: clean.status === "active" ? `Under contract at $${clean.contractPrice.toLocaleString("en-US")}` : clean.status === "closed" ? "Closed" : "Contract cancelled",
+    });
+  }
+  revalidatePath("/realestate/command");
+  return { contracts: await getContracts(), state };
 }

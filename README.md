@@ -128,6 +128,24 @@ never owner details or their distress) and LOG SENT records it without
 touching the owner follow-up cadence. Add buyers one at a time or paste a
 spreadsheet. Stored in `re_buyers` (see `schema.sql`).
 
+**Offer engine** (`lib/re-offer.ts`, OFFER tab): works back from the exit.
+Walk-away = best-fit buyer's likely price − closing buffer − your minimum fee;
+target leaves your target fee; opening sits 10% under target (all editable
+under "Your offer rules", rounded to $500). Then the seller side: what they must
+clear (payoff estimate + back taxes + their closing costs) decides whether the
+deal is feasible, tight, or needs a short sale / creative structure, and a
+side-by-side shows what they'd pocket from your target vs listing as-is. OFFER
+LETTER drafts a non-binding LOI; the real contract is your attorney's form.
+
+**Contract tracker** (`lib/re-contract.ts`, CONTRACT tab): start it when the
+seller signs. It tracks earnest money due (default 3 days), the due-diligence
+window (default 10 days: assign a buyer or terminate before it ends), and
+closing, with countdowns on Today and in the pipeline; assigns a matched buyer
+and the fee; runs the Georgia assignment checklist (closing attorney, title,
+assignment agreement, buyer EMD…). Starting, closing (records the fee as closed
+$) or cancelling moves the pipeline stage. Properties under contract leave the
+calling queue. Stored in `re_contracts`.
+
 **Today** (the desk's opening view): follow-ups due, new signals this week, the
 next Georgia foreclosure sale (first Tuesday; Wednesday when that is Jan 1 or
 Jul 4) with the properties noticed for it, probate in the last 90 days, the top

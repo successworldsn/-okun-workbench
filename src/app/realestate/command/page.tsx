@@ -1,5 +1,5 @@
 import { analyzeAll } from "@/lib/re-intel";
-import { getActivity, getDeskStates, loadIntelData, deskTablesReady, MISSING_TABLES, getBuyers } from "@/lib/re-desk-store";
+import { getActivity, getDeskStates, loadIntelData, deskTablesReady, MISSING_TABLES, getBuyers, getContracts } from "@/lib/re-desk-store";
 import { CLAUDE_CONFIGURED } from "@/lib/claude";
 import { DealDesk } from "@/components/realestate/DealDesk";
 
@@ -11,7 +11,7 @@ const MAX_ON_DESK = 800;
 
 export default async function GodsEyeCommand() {
   const now = new Date();
-  const [data, states, activity, ready, buyers] = await Promise.all([loadIntelData(now), getDeskStates(), getActivity(), deskTablesReady(), getBuyers()]);
+  const [data, states, activity, ready, buyers, contracts] = await Promise.all([loadIntelData(now), getDeskStates(), getActivity(), deskTablesReady(), getBuyers(), getContracts()]);
   const all = analyzeAll(data.properties, data.market, now);
   // Anything already in the pipeline stays on the desk even if it scores low.
   const keep = all.filter((i, n) => n < MAX_ON_DESK || states[i.p.id]);
@@ -21,6 +21,7 @@ export default async function GodsEyeCommand() {
       initialStates={states}
       initialActivity={activity}
       initialBuyers={buyers}
+      initialContracts={contracts}
       meta={{ example: data.example, generatedAt: data.generatedAt, sources: data.sources, note: [data.note, ready ? null : MISSING_TABLES].filter(Boolean).join(" · ") || undefined }}
       market={data.market}
       nowIso={now.toISOString()}

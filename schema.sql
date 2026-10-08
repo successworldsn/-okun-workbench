@@ -493,3 +493,13 @@ alter table re_buyers enable row level security;
 -- Already created re_activity before buyers existed? Run:
 --   alter table re_activity drop constraint re_activity_kind_check;
 --   alter table re_activity add constraint re_activity_kind_check check (kind in ('call','sms','email','letter','verify','research','note','skip','stage','buyer'));
+
+-- Contract tracker: one row per property under contract (deadlines, checklist,
+-- assignment) — shape lives in lib/re-contract.ts.
+create table re_contracts (
+  parcel_id text primary key,
+  data jsonb not null,
+  status text not null default 'active' check (status in ('active','closed','cancelled')),
+  updated_at timestamptz not null default now()
+);
+alter table re_contracts enable row level security;
