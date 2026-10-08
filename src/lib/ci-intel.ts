@@ -475,7 +475,7 @@ export function analyzeSite(s: Site, signals: Signal[], capital: CapitalSource[]
   ];
   const theses = [...thesisList].sort((a, b) => b.fit - a.fit);
 
-  const layers: Layer[] = ["land"];
+  const layers: Layer[] = s.acres != null ? ["land"] : [];
   if (mw >= CI_ASSUME.minUsefulMw) layers.push("power");
   if (factors.fiber.score >= 60) layers.push("fiber");
   if (has(s.power.onsiteGenerationMw)) layers.push("energy");
