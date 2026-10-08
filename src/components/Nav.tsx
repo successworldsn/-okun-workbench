@@ -18,6 +18,7 @@ const links = [
   { href: "/facebook", label: "Facebook" },
   { href: "/catalog-checklist", label: "Catalog" },
   { href: "/greenadvantage/command#intelligence", label: "GA Intel" },
+  { href: "/realestate/command", label: "God's Eye" },
 ];
 
 function HexMark() {

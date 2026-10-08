@@ -17,3 +17,7 @@ npm-debug.log*
 # misc
 .DS_Store
 *.pem
+
+# real-estate feed output (owner names from public records; regenerate, don't commit)
+data/
+tsconfig.tsbuildinfo

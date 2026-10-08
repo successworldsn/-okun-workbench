@@ -10,10 +10,11 @@
     "test": "node --test src/lib/*.test.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.110.2",
+    "maplibre-gl": "5.24.0",
     "next": "15.0.0",
     "react": "^18",
-    "react-dom": "^18",
-    "@supabase/supabase-js": "2.110.2"
+    "react-dom": "^18"
   },
   "devDependencies": {
     "@types/node": "^20",

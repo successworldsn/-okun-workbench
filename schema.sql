@@ -450,3 +450,33 @@ insert into external_blockers (label, submitted_at, typical_turnaround_days, not
   ('eBay production API keyset activation', '2026-07-06', 5, 'Blocked on Marketplace Account Deletion webhook — endpoint built, needs deploy + registration in eBay Developer Portal.'),
   ('Twilio toll-free verification (30482 + 30513)', '2026-07-06', 3, 'Business email + SMS opt-in fixes made; awaiting resubmission and Twilio review.'),
   ('Net10th drop-ship approval with SSF rep', null, null, 'Not yet submitted.');
+
+-- ============================================================ God's Eye Deal Desk (real estate)
+-- Property intelligence itself is computed from data/atlanta-intel.json (public
+-- records, re-pulled by tools/atlanta-intel); only what the operator does is
+-- stored here: pipeline stage, follow-up dates, and an append-only contact log.
+create table re_desk_state (
+  parcel_id text primary key,
+  stage text not null default 'DISCOVERED' check (stage in ('DISCOVERED','RESEARCHING','CONTACTED','CONVERSATION','OPPORTUNITY','NEGOTIATION','CONTRACT','CLOSED','DEAD')),
+  next_follow_up timestamptz,
+  snoozed_until timestamptz,
+  closed_amount numeric(12,2),
+  updated_at timestamptz not null default now()
+);
+
+create table re_activity (
+  id uuid primary key default gen_random_uuid(),
+  parcel_id text not null,
+  kind text not null check (kind in ('call','sms','email','letter','verify','research','note','skip','stage')),
+  outcome text,
+  note text,
+  stage text,
+  amount numeric(12,2),
+  created_at timestamptz not null default now()
+);
+create index re_activity_parcel_idx on re_activity (parcel_id, created_at desc);
+create trigger re_activity_append_only before update or delete on re_activity
+  for each row execute function forbid_ledger_mutation();
+
+alter table re_desk_state enable row level security;
+alter table re_activity enable row level security;

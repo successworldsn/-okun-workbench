@@ -1,0 +1,71 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { logActivity, loadIntelData } from "@/lib/re-desk-store";
+import { STAGES, nextAction, type ActivityKind, type Outcome, type Stage, type DeskState } from "@/lib/re-desk";
+import { analyze } from "@/lib/re-intel";
+import { draftOutreach, planFor, COMPLIANCE, type Channel } from "@/lib/re-outreach";
+import { complete, CLAUDE_CONFIGURED } from "@/lib/claude";
+
+const KINDS: ActivityKind[] = ["call", "sms", "email", "letter", "verify", "research", "note", "skip", "stage"];
+
+export async function logTouch(input: { parcelId: string; kind: ActivityKind; outcome: Outcome; note?: string; stage?: Stage; amount?: number | null }): Promise<DeskState> {
+  if (!KINDS.includes(input.kind)) throw new Error("Unknown activity");
+  if (input.stage && !STAGES.includes(input.stage)) throw new Error("Unknown stage");
+  const state = await logActivity({ parcelId: input.parcelId, kind: input.kind, outcome: input.outcome, note: input.note?.slice(0, 2000), stage: input.stage, amount: input.amount ?? null });
+  revalidatePath("/realestate/command");
+  return state;
+}
+
+async function intelFor(parcelId: string) {
+  const now = new Date();
+  const data = await loadIntelData(now);
+  const p = data.properties.find((x) => x.id === parcelId);
+  return p ? { i: analyze(p, data.market, now), now } : null;
+}
+
+const GROUNDING =
+  "You are the analyst on a real-estate acquisitions desk. Use ONLY the facts in the JSON you are given. " +
+  "Never invent owner circumstances, condition, payoff balances or comps. If something is unknown, say it is unknown. " +
+  "Plain English, short, no hype. Every claim must trace to a field in the JSON.";
+
+function factSheet(i: ReturnType<typeof analyze>) {
+  return JSON.stringify({
+    address: i.p.address,
+    example_data: !!i.p.example,
+    score: i.score,
+    confidence: i.confidence,
+    strongest: i.strongest,
+    conclusions: i.conclusions.map((c) => ({ label: c.label, independent_sources: c.independentSources, corroborated: c.corroborated })),
+    engines: Object.fromEntries(Object.values(i.engines).map((e) => [e.key, { score: e.score, findings: e.findings.map((f) => f.text) }])),
+    value: i.value,
+    strategies: i.strategies.slice(0, 4),
+    unknowns: i.unknowns,
+    next_verification: i.nextVerification,
+  });
+}
+
+/** "WHAT SHOULD I DO?" — deterministic plan, optionally rewritten by Claude from the same facts. */
+export async function askOracle(parcelId: string, stage: Stage | null): Promise<{ text: string; by: "engine" | "claude" }> {
+  const r = await intelFor(parcelId);
+  if (!r) return { text: "Property not found in the current feed.", by: "engine" };
+  const state = stage ? ({ parcelId, stage, nextFollowUp: null, snoozedUntil: null, updatedAt: r.now.toISOString() } as DeskState) : undefined;
+  const a = nextAction(r.i, state, r.now);
+  const plan = planFor(r.i, a.verb, a.why);
+  if (!CLAUDE_CONFIGURED) return { text: plan, by: "engine" };
+  const res = await complete(GROUNDING, `Facts:\n${factSheet(r.i)}\n\nEngine plan:\n${plan}\n\nIn 6 lines or fewer: what should the operator do next with this property today, and what would change the plan?`, 500);
+  return res.ok && res.text ? { text: res.text, by: "claude" } : { text: plan, by: "engine" };
+}
+
+export async function draftMessage(parcelId: string, channel: Channel, polish: boolean): Promise<{ text: string; compliance: string; by: "template" | "claude" }> {
+  const r = await intelFor(parcelId);
+  if (!r) return { text: "", compliance: "", by: "template" };
+  const text = draftOutreach(r.i, channel);
+  if (!polish || !CLAUDE_CONFIGURED) return { text, compliance: COMPLIANCE[channel], by: "template" };
+  const res = await complete(
+    GROUNDING + " Do not mention distress, taxes, code cases, foreclosure or any public-record problem to the owner.",
+    `Polish this ${channel} draft to sound warm and human. Keep every placeholder in [brackets]. Keep it the same length or shorter.\n\n${text}`,
+    600,
+  );
+  return { text: res.ok && res.text ? res.text : text, compliance: COMPLIANCE[channel], by: res.ok ? "claude" : "template" };
+}

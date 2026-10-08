@@ -1,0 +1,28 @@
+{
+  "note": "Layer URLs for atlanta-feed.mjs. Run `node tools/atlanta-intel/atlanta-feed.mjs --discover` to list candidates, then paste the /FeatureServer/<n> or /MapServer/<n> URL here (or set ATL_<KEY>_URL). Field names are matched by alias, so a layer rename doesn't need code changes; the run prints any field it couldn't map.",
+  "layers": {
+    "parcels": {
+      "label": "City of Atlanta tax parcels",
+      "search": ["coa_tax_parcels", "Tax Parcels"],
+      "url": null,
+      "idField": "PARCELID",
+      "zipField": "SITEZIP"
+    },
+    "cama": {
+      "label": "Fulton CAMA attributes (Tolemi_Parcels)",
+      "search": ["Tolemi_Parcels"],
+      "url": null,
+      "idField": null
+    },
+    "permits": {
+      "label": "Atlanta building permits + Building Complaint records",
+      "search": ["Building Permits", "Permits"],
+      "url": null
+    },
+    "code_history": {
+      "label": "Atlanta code enforcement 2021–2023",
+      "search": ["Code_Enforcement_Data_2021_2023", "Code Enforcement"],
+      "url": null
+    }
+  }
+}

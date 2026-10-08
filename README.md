@@ -53,6 +53,9 @@ human-in-the-loop at every dollar.
 | **v3.1 — Auth** (`/login`, `middleware.ts`): per-user session login, EJ full access / Usman parts-only route gating | ✅ Web Crypto HMAC session cookie (`lib/session.ts`, Edge-safe), Node scrypt password hashing (`lib/auth.ts`, login-route-only). **DEMO_MODE bypasses auth entirely** — no real Supabase creds means no real users to check, so don't mistake local dev working without login for the real thing being verified; only actually enforced once `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` are set. No password-change UI yet — see **Authentication**. |
 | **v3.1 — System Health Layer**: real status pill (active/attention/not_set_up/error) per module, Diagnose button (Claude-backed plain-English read + Try It / Copy Fix), External Blockers panel on Today | ✅ `lib/system-health.ts` (pure combinators, tested), `system_health_events` + `external_blockers` tables. Every check is real data (ledger recency, catalog freshness, credential presence, logged cron runs) — if a check can't be built, the pill says not_set_up, never green. |
 | **v3.1 — Visual reskin**: dark "sacred geometry" theme, Space Grotesk/Inter/JetBrains Mono, CSS-only animated background (no JS render loop) | ✅ Same components/pages as before, restyled — no logic changes from the reskin itself. |
+| **God's Eye — Real Estate Command** (`/realestate/command`): MapLibre globe → Atlanta (satellite / dark / 3D terrain), mission modes, daily queue, property dossier, pipeline, contact log, command bar, money screen, data-freshness screen | ✅ See **God's Eye** below. Runs on fictional EXAMPLE data until the feed has run. Owner outreach is drafts only — a person sends every message. |
+| **God's Eye — intelligence engine** (`lib/re-intel.ts`): distress, motivation, equity, value-gap, development, market and risk engines → opportunity score + confidence, 2+-signal corroboration, VERIFIED / INFERRED / STALE badge on every piece of evidence | ✅ Tested (`re-intel.test.ts`, `re-desk.test.ts`, `re-feed-map.test.ts`). |
+| **God's Eye — Atlanta feed** (`tools/atlanta-intel/atlanta-feed.mjs`): permits + Building Complaint records + code history + parcels + Fulton CAMA, joined by parcel; tax / foreclosure / probate lists from records requests | ✅ Verified against a mock ArcGIS server. **Layer URLs not yet set** — run `--discover` from a network that reaches `gis.atlantaga.gov`. |
 
 Tests: `npm test` runs 8 suites via `node --test` — `lib/vero-guard.test.ts` (6),
 `lib/ssf-gates.test.ts` (9), `lib/fb-gate.test.ts` (4, catches a real UTC/local
@@ -65,6 +68,60 @@ engines tested are the ones where a bug either loses the eBay account (VeRO),
 breaks the spend-safety promise (SSF gates, Gift Protocol cap), silently
 miscounts toward an autonomy threshold (Messenger gate), or lets an
 unverified fact slip into outreach (Gift Protocol confidence filter).
+
+## God's Eye — Real Estate Command
+
+`/realestate/command` is a full-screen desk you work from, not a dashboard you
+look at: **SEE → DETECT → INVESTIGATE → CONTACT → FOLLOW UP → DEAL.** God's Eye
+sees (map), the engine analyzes (dossier), the Deal Desk acts (queue + log).
+
+**Government-first, free data.** No MLS, PropStream or ATTOM dependency. The
+feed pulls signals first (permits, Building Complaint records, 2021–2023 code
+cases, plus any tax-delinquent / foreclosure-notice / probate list you obtained
+by records request), then pulls parcel + Fulton CAMA rows only for the parcels
+those signals touch, plus every parcel in any ZIP you sweep:
+
+```bash
+node tools/atlanta-intel/atlanta-feed.mjs --discover       # find layer URLs → tools/atlanta-intel/sources.json
+node tools/atlanta-intel/atlanta-feed.mjs --since 730 --zip 30310 --zip 30314 \
+     --tax lists/tax.csv --foreclosure lists/notices.csv --probate lists/estates.csv
+```
+
+Output: `data/atlanta-intel.json` (git-ignored: it holds owner names) and
+`data/deal-intel-import.csv`, which pastes straight into the Atlanta Deal
+Intelligence worksheet's importer for full underwriting. On Vercel, upload the
+JSON somewhere private and set `RE_INTEL_URL`.
+
+**Opportunity score** = stretched weighted mean of distress (25%), motivation
+(18%), equity (17%), value gap (14%), development (14%) and market (12%), minus
+20% of the risk score. Every finding carries its evidence; every conclusion
+(absentee, distress, vacant, equity, renovation, development) counts its
+*independent* government sources and says "needs a 2nd signal" when it has one.
+**Confidence** rises with independent sources and the share of VERIFIED
+evidence, falls with critical unknowns (value, debt, tax status, zoning), and is
+capped at 97%. Badges: 🟢 VERIFIED = government record inside its freshness
+window · 🟡 INFERRED = an engine rule or derived figure · 🔴 STALE = old record or
+a history-only dataset (the 2021–2023 code layer is always STALE).
+
+What the engines will not pretend to know: interior condition, the owner's
+intent, a payoff balance (debt is amortized from recorded security deeds when
+present, otherwise labeled an inference), or zoning entitlement (the zoning
+screen uses ordinance minimum lot sizes and always says "verify").
+
+**Desk state** (`re_desk_state`, append-only `re_activity`): stage
+DISCOVERED → RESEARCHING → CONTACTED → CONVERSATION → OPPORTUNITY → NEGOTIATION →
+CONTRACT → CLOSED (or DEAD). Logging a touch schedules the follow-up (no answer
++2 days, left message +3, text/email +3, letter +7, skip snoozes 30) and the
+queue puts due follow-ups first, then untouched properties by score.
+
+**Command bar** (deterministic parser, `lib/re-desk.ts`): e.g. "distressed
+within 5 miles of Atlanta with at least $200K equity", "vacant where zoning
+allows more units", "20 best I haven't contacted", "why is this ranked 94?".
+It echoes what it understood as a removable chip.
+
+**Map sources** (free, credited on the map): Esri World Imagery, CARTO dark
+basemap (OpenStreetMap data), AWS Terrain Tiles. MIT covers our code, not these
+datasets: keep each provider's attribution and terms.
 
 ## Setup
 
