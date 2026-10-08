@@ -25,10 +25,11 @@ const run = (args) => {
 
 console.log(`mode=${mode} since=${since} zips=${zips.join(",") || "—"} counties=${counties.join(" ") || "—"}`);
 if (mode === "discover") run(["tools/atlanta-intel/atlanta-feed.mjs", "--discover"]);
+else if (mode === "inspect") run(["tools/atlanta-intel/atlanta-feed.mjs", ...(req.searches ?? []).flatMap((q) => ["--search", q]), ...(req.inspect ?? []).flatMap((u) => ["--inspect", u])]);
 else if (mode === "feed") {
   run(["tools/atlanta-intel/atlanta-feed.mjs", "--since", String(since), ...zips.flatMap((z) => ["--zip", z]), ...counties.flatMap((c) => ["--county", c])]);
   run(["tools/godseye-preview/build.mjs", "--data", "data/atlanta-intel.json"]);
 } else {
-  console.error(`Unknown mode "${mode}" (discover | feed).`);
+  console.error(`Unknown mode "${mode}" (discover | inspect | feed).`);
   process.exit(1);
 }

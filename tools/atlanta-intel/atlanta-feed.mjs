@@ -51,6 +51,8 @@ function args() {
   const one = (flag, d = null) => all(flag)[0] ?? d;
   return {
     discover: a.includes("--discover"),
+    searches: all("--search"),
+    inspects: all("--inspect"),
     since: Number(one("--since", "730")),
     zips: all("--zip"),
     tax: one("--tax"),
@@ -232,6 +234,39 @@ async function crawlCity(keywords) {
   return hits;
 }
 
+/** Free-text ArcGIS Online searches, then sample rows from specific layers (owner / mailing fields masked). */
+async function searchAndInspect(searches, inspects) {
+  for (const q of searches) {
+    console.log(`\n== search: ${q} ==`);
+    try {
+      const j = await getJson("https://www.arcgis.com/sharing/rest/search", { q: `${q} AND (type:"Feature Service" OR type:"Map Service")`, num: "10", sortField: "modified", sortOrder: "desc" });
+      for (const r of j.results ?? []) {
+        if (!r.url) continue;
+        console.log(`  candidate: "${r.title}" · owner ${r.owner} · modified ${new Date(r.modified).toISOString().slice(0, 10)}`);
+        (await describeService(r.url)).slice(0, 3).forEach((l) => console.log(l));
+      }
+    } catch (e) {
+      console.log(`  failed: ${e.message}`);
+    }
+  }
+  const MASK = /OWN|PSTL|MAIL|GRANTEE|GRANTOR|PHONE|EMAIL/i;
+  for (const url of inspects) {
+    console.log(`\n== inspect: ${url} ==`);
+    try {
+      const meta = await getJson(url, {});
+      console.log(`  "${meta.name}" · maxRecordCount ${meta.maxRecordCount} · fields: ${(meta.fields ?? []).map((f) => `${f.name}:${String(f.type).replace("esriFieldType", "")}`).join(", ")}`);
+      const df = (meta.fields ?? []).find((f) => f.type === "esriFieldTypeDate");
+      const j = await getJson(`${url}/query`, { where: "1=1", outFields: "*", returnGeometry: "false", resultRecordCount: "3", ...(df ? { orderByFields: `${df.name} DESC` } : {}) });
+      for (const f of j.features ?? []) {
+        const row = Object.fromEntries(Object.entries(f.attributes).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, MASK.test(k) ? "•••" : typeof v === "number" && v > 9e11 ? new Date(v).toISOString().slice(0, 10) : v]));
+        console.log(`  sample: ${JSON.stringify(row).slice(0, 1500)}`);
+      }
+    } catch (e) {
+      console.log(`  failed: ${e.message}`);
+    }
+  }
+}
+
 async function discover(cfg) {
   const KEY = /parcel|tax|permit|code|enforce|complain|tolemi|zoning|311|opportun|flood|cama|property/i;
   console.log("== City of Atlanta ArcGIS services matching parcel/permit/code/zoning ==");
@@ -294,6 +329,7 @@ async function main() {
   const opt = args();
   const cfg = await loadSources();
   if (opt.discover) return discover(cfg);
+  if (opt.searches.length || opt.inspects.length) return searchAndInspect(opt.searches, opt.inspects);
   const L = cfg.layers;
   const missing = ["parcels", "permits"].filter((k) => !L[k].url);
   if (missing.length) {
