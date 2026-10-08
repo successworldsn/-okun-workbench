@@ -40,39 +40,39 @@ const yes = (v: unknown) => /^(y|yes|true|1|x|checked)$/i.test(String(v ?? "").t
 export const parcelKey = (v: unknown) => String(v ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 
 export const FIELDS = {
-  parcelId: ["PARCELID", "PARCEL_NO", "PARID", "PIN_NUM", "PARCELNUMB", "PARCEL_ID", "PIN", "ParcelNumber", "PARCEL", "Parcel_No", "LOWPARCELID", "APN"],
-  address: ["SITEADDRESS", "SITUS_ADDR", "SITUSADDR", "LOCADDR", "LOCATION_ADDRESS", "PROP_ADDR", "SITUS", "SITUS_ADDRESS", "Address", "ADDRESS", "FULLADDR", "SiteAddr", "PROPERTY_ADDRESS", "LOCATION"],
-  city: ["SITECITY", "SITUS_CITY", "LOCCITY", "CITY", "PROP_CITY"],
-  zip: ["SITEZIP", "ZIP", "ZIPCODE", "ZIP_CODE", "SitusZip"],
-  owner: ["OWNERNME1", "OWNER_NAM1", "OWNNAME", "OWNER1_NAME", "OWN1", "OWNER", "OWNER_NAME", "Owner1", "OWNERNAME"],
-  ownerMail1: ["PSTLADDRESS", "OWNER_ADDR1", "MAIL_ADDRESS", "OWNADDR1", "MAILADDR1", "MAILADDR", "MAILING_ADDRESS", "OWNER_ADDRESS", "OwnerAddr1", "MAIL_ADDR1"],
+  parcelId: ["PARCELID", "ParcelID", "PARCEL", "PARCEL_NO", "PARID", "PIN_NUM", "PARCELNUMB", "PARCEL_ID", "PIN", "ParcelNumber", "PARCEL", "Parcel_No", "LOWPARCELID", "APN"],
+  address: ["SITEADDRESS", "SITEADDRESS1", "SITUS_ADDR", "SITUSADDR", "LOCADDR", "LOCATION_ADDRESS", "PROP_ADDR", "SITUS", "SITUS_ADDRESS", "Address", "ADDRESS", "FULLADDR", "SiteAddr", "PROPERTY_ADDRESS", "LOCATION"],
+  city: ["SITECITY", "SITECITY1", "SITUS_CITY", "LOCCITY", "CITY", "PROP_CITY"],
+  zip: ["SITEZIP", "SITEZIP1", "ZIP", "ZIPCODE", "ZIP_CODE", "SitusZip"],
+  owner: ["OWNERNME1", "Owner", "OWNER_NAM1", "OWNNAME", "OWNER1_NAME", "OWN1", "OWNER", "OWNER_NAME", "Owner1", "OWNERNAME"],
+  ownerMail1: ["PSTLADDRESS", "OwnerAddr1", "OWNER_ADDR1", "MAIL_ADDRESS", "OWNADDR1", "MAILADDR1", "MAILADDR", "MAILING_ADDRESS", "OWNER_ADDRESS", "OwnerAddr1", "MAIL_ADDR1"],
   ownerMailCity: ["PSTLCITY", "OWNER_CITY1", "OWNCITY", "MAILCITY1", "MAILCITY", "OWNER_CITY", "MAIL_CITY"],
   ownerMailState: ["PSTLSTATE", "OWNSTATE", "OWNER_ST", "MAILSTATE1", "MAILSTATE", "OWNER_STATE", "MAIL_STATE"],
   ownerMailZip: ["PSTLZIP5", "OWNZIP", "OWNER_ZIP5", "MAILZIP1", "MAILZIP", "OWNER_ZIP", "MAIL_ZIP"],
-  landUse: ["CLASSDSCRP", "LANDUSE", "LUC_DESC", "PROPERTY_CLASS", "USECD"],
-  zoning: ["ZONING", "ZONING_CODE", "ZONECLASS", "Zoning1"],
+  landUse: ["CLASSDSCRP", "ClassCode", "LUCode", "LANDUSE", "LUC_DESC", "PROPERTY_CLASS", "USECD"],
+  zoning: ["ZONING", "Zoning_Classification", "ZONING_CODE", "ZONECLASS", "Zoning1"],
   lotSqft: ["LOT_SQFT", "LANDSQFT", "LAND_SQFT", "LotSize", "SQFT_LAND"],
-  lotAcres: ["ACRES", "CALC_ACRE", "STATEDAREA", "Acreage"],
-  sqft: ["RESFLRAREA", "LIVING_AREA", "BLDG_SQFT", "SQFT", "HEATED_SQFT", "FinishedArea"],
-  beds: ["BEDROOMS", "BEDS", "NUM_BEDROOMS"],
-  baths: ["BATHS", "FULL_BATHS", "BATHROOMS", "NUM_BATHS"],
-  yearBuilt: ["RESYRBLT", "YEAR_BUILT", "YRBUILT", "YearBuilt"],
-  units: ["UNITS", "LIVING_UNITS", "NUM_UNITS", "DWELLING_UNITS"],
+  lotAcres: ["ACRES", "LandAcres", "GIS_ACRES", "CALC_ACRE", "STATEDAREA", "Acreage"],
+  sqft: ["RESFLRAREA", "TotalResidentialAreaSF", "AreaSF", "LIVING_AREA", "BLDG_SQFT", "SQFT", "HEATED_SQFT", "FinishedArea"],
+  beds: ["BEDROOMS", "TotBed", "BEDS", "NUM_BEDROOMS"],
+  baths: ["BATHS", "FixBath", "FULL_BATHS", "BATHROOMS", "NUM_BATHS"],
+  yearBuilt: ["RESYRBLT", "YrBlt", "YEAR_BUILT", "YRBUILT", "YearBuilt"],
+  units: ["UNITS", "LivUnits", "LIVING_UNITS", "NUM_UNITS", "DWELLING_UNITS"],
   assessed: ["TOT_ASSESS", "TOTAL_ASSESSED", "ASSESSED_VALUE", "CNTASSDVAL", "TotAssess"],
   appraised: ["TOT_APPR", "APPRAISED", "TOTAPR", "FMV_TOTAL", "TOTAL_FMV", "APPR_TOTAL", "TOTAL_APPRAISED", "APPRAISED_VALUE", "FAIR_MARKET_VALUE", "TotAppr", "MARKET_VALUE"],
   landValue: ["LAND_APPR", "LANDVAL", "LAND_VALUE", "LndAppr"],
-  homestead: ["HOMESTEAD", "EXEMPT_CODE", "HMSTD", "EXEMPTIONS"],
+  homestead: ["HOMESTEAD", "Homestead", "EXEMPT_CODE", "HMSTD", "EXEMPTIONS"],
   saleDate: ["SALEDATE", "SALE_DATE", "LAST_SALE_DATE", "DeedDate"],
   salePrice: ["SALEPRICE", "SALE_PRICE", "LAST_SALE_PRICE", "SaleAmt"],
   taxYear: ["TAXYEAR", "TAX_YEAR", "TAXYR"],
   // permits / complaints
-  permitId: ["PERMIT_NUMBER", "PermitNum", "RECORD_ID", "Record_ID", "RECORDID", "CASE_NUMBER", "PERMITNO", "OBJECTID"],
-  permitType: ["RECORD_TYPE", "RecordType", "PERMIT_TYPE", "PermitType", "WORK_TYPE", "TYPE", "Record_Type"],
-  permitSubtype: ["PERMIT_SUBTYPE", "SUBTYPE", "WorkClass", "WORK_CLASS", "CATEGORY"],
+  permitId: ["PERMIT_NUMBER", "RecordID", "PermitNum", "RECORD_ID", "Record_ID", "RECORDID", "CASE_NUMBER", "PERMITNO", "OBJECTID"],
+  permitType: ["TypeCombo", "RECORD_TYPE", "RecordType", "PERMIT_TYPE", "PermitType", "WORK_TYPE", "TYPE", "Record_Type"],
+  permitSubtype: ["PERMIT_SUBTYPE", "Use_", "SUBTYPE", "WorkClass", "WORK_CLASS", "CATEGORY"],
   permitDesc: ["DESCRIPTION", "WORK_DESCRIPTION", "PROJECT_DESCRIPTION", "Description", "PROJECT_NAME"],
-  permitStatus: ["STATUS", "RECORD_STATUS", "Status", "CASE_STATUS"],
-  permitDate: ["ISSUED_DATE", "ISSUE_DATE", "IssuedDate", "OPENED_DATE", "OPEN_DATE", "APPLIED_DATE", "FILE_DATE", "DATE_OPENED", "CreatedDate"],
-  permitValue: ["VALUATION", "JOB_VALUE", "CONST_COST", "EstProjectCost", "VALUE"],
+  permitStatus: ["Status_1", "STATUS", "RECORD_STATUS", "Status", "CASE_STATUS"],
+  permitDate: ["OrigOpened", "ISSUED_DATE", "ISSUE_DATE", "IssuedDate", "OPENED_DATE", "OPEN_DATE", "APPLIED_DATE", "FILE_DATE", "DATE_OPENED", "CreatedDate"],
+  permitValue: ["JOB_VALUE", "JobValue", "VALUATION", "JOB_VALUE", "CONST_COST", "EstProjectCost", "VALUE"],
   // code enforcement history
   caseId: ["CASE_NUMBER", "CaseNumber", "CASE_NO", "CASE_ID", "OBJECTID"],
   caseType: ["CASE_TYPE", "CaseType", "VIOLATION_TYPE", "VIOLATION", "TYPE", "Description"],
@@ -204,7 +204,12 @@ export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefin
   const srcOf = (k: keyof typeof FIELDS): SourceId => (cama && pick(cama, [...FIELDS[k]]) != null ? "fulton_cama" : parcelSrc);
   const id = parcelKey(pick(parcelRow, [...FIELDS.parcelId]));
   const c = centroid(geometry);
-  const mail = [str(pick(parcelRow, [...FIELDS.ownerMail1])), str(pick(parcelRow, [...FIELDS.ownerMailCity])), str(pick(parcelRow, [...FIELDS.ownerMailState])), str(pick(parcelRow, [...FIELDS.ownerMailZip]))].filter(Boolean).join(", ");
+  // Tolemi / county layers carry the mailing city-state-zip as one line ("HOUSTON TX 77001").
+  const mailLine2 = str(pick(cama ?? {}, ["OwnerAddr2"])) ?? str(pick(parcelRow, ["OwnerAddr2", "PSTLADDRESS2"]));
+  const mail1 = str(pick(parcelRow, [...FIELDS.ownerMail1])) ?? str(pick(cama ?? {}, [...FIELDS.ownerMail1]));
+  const mailCity = str(pick(parcelRow, [...FIELDS.ownerMailCity]));
+  const mail = (mailCity ? [mail1, mailCity, str(pick(parcelRow, [...FIELDS.ownerMailState])), str(pick(parcelRow, [...FIELDS.ownerMailZip]))] : [mail1, mailLine2]).filter(Boolean).join(", ");
+  const mailState = str(pick(parcelRow, [...FIELDS.ownerMailState])) ?? mailLine2?.match(/\b([A-Z]{2})\s+\d{5}/)?.[1] ?? null;
   const appraised = num(both("appraised"));
   const assessed = num(both("assessed"));
   const lotSqft = num(both("lotSqft")) ?? (num(both("lotAcres")) != null ? Math.round(num(both("lotAcres"))! * 43560) : null);
@@ -217,16 +222,17 @@ export function mapParcel(parcelRow: Row, geometry: unknown, cama: Row | undefin
     city: where.city ?? (str(pick(parcelRow, [...FIELDS.city])) ?? undefined),
     zip: str(pick(parcelRow, [...FIELDS.zip]))?.slice(0, 5) ?? undefined,
     county: where.county,
+    neighborhood: str(pick(parcelRow, ["NEIGHBORHOOD", "NbrHood"])) ?? undefined,
     lat: c?.lat ?? null,
     lng: c?.lng ?? null,
-    owner: str(pick(parcelRow, [...FIELDS.owner])) ?? undefined,
+    owner: str(pick(parcelRow, [...FIELDS.owner])) ?? str(pick(cama ?? {}, [...FIELDS.owner])) ?? undefined,
     ownerMailing: mail || undefined,
-    ownerMailingState: str(pick(parcelRow, [...FIELDS.ownerMailState])) ?? undefined,
+    ownerMailingState: mailState ?? undefined,
     homesteadExemption: hs == null ? null : !/^(0|n|no|none)$/i.test(hs),
     landUse: str(both("landUse")) ?? undefined,
     existingUnits: num(both("units")),
     beds: num(both("beds")),
-    baths: num(both("baths")),
+    baths: num(both("baths")) != null ? num(both("baths"))! + 0.5 * (num(pick(cama ?? {}, ["FixHalf"])) ?? 0) : null,
     sqft: num(both("sqft")),
     yearBuilt: num(both("yearBuilt")),
     lotSqft,

@@ -1,21 +1,11 @@
 {
-  "mode": "inspect",
-  "searches": [
-    "Tolemi",
-    "owner:gpickren2",
-    "owner:weiliu2",
-    "owner:gismanager_COADWM",
-    "Atlanta building permits",
-    "Atlanta Accela permits",
-    "ATL311 service requests Atlanta",
-    "Fulton County parcels assessment"
-  ],
-  "inspect": [
-    "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/coa_tax_parcels/FeatureServer/0",
-    "https://gis.atlantaga.gov/dpcd/rest/services/OPALMapServices/Lots_Parcels_Hybrid_Beta/MapServer/0",
-    "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/Code_Enforcement_Data_2021_2023/FeatureServer/0",
-    "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28",
-    "https://services2.arcgis.com/IxVN2oUE9EYLSnPE/arcgis/rest/services/Tax_Parcels_2025/FeatureServer/0"
+  "mode": "feed",
+  "since": 730,
+  "zips": [
+    "30310",
+    "30314",
+    "30315",
+    "30318"
   ],
   "note": "Commit a change to this file on a claude/* branch to run the Atlanta feed on GitHub's runners (see .github/workflows/atlanta-feed.yml)."
 }

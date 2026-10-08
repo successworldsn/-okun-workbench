@@ -343,6 +343,14 @@ async function main() {
   const touched = new Set();
   const byParcel = new Map(); // parcel → { permits, cases }
   const byAddr = new Map(); // normalized address → parcel (filled once parcels arrive)
+  // Layers disagree on spacing/dashes, and hosted layers can't REPLACE() in SQL:
+  // keep each parcel id exactly as a layer wrote it, keyed by its normalized form.
+  const rawIds = new Map();
+  const seeRaw = (v) => {
+    const k = parcelKey(v);
+    if (k) rawIds.set(k, new Set([...(rawIds.get(k) ?? []), String(v).trim()]));
+    return k;
+  };
   const bucket = (k) => byParcel.get(k) ?? (byParcel.set(k, { permits: [], cases: [] }), byParcel.get(k));
   const orphanAddr = []; // rows with an address but no parcel id
 
@@ -357,7 +365,7 @@ async function main() {
       const r = mapPermitRow(f.attributes);
       const d = r.permit?.issuedAt ?? r.complaint?.openedAt;
       if (d) { minD = !minD || d < minD ? d : minD; maxD = !maxD || d > maxD ? d : maxD; }
-      const key = r.parcel ? parcelKey(r.parcel) : null;
+      const key = r.parcel ? seeRaw(r.parcel) : null;
       const item = r.complaint ? { case: r.complaint } : { permit: r.permit };
       if (key) {
         const b = bucket(key);
@@ -373,7 +381,7 @@ async function main() {
     const { features } = await query(L.code_history.url, "1=1");
     for (const f of features) {
       const r = mapCodeRow(f.attributes);
-      const key = r.parcel ? parcelKey(r.parcel) : null;
+      const key = r.parcel ? seeRaw(r.parcel) : null;
       if (key) {
         bucket(key).cases.push(r.case);
         if (r.case.open || r.case.vacant || r.case.boarded) touched.add(key);
@@ -398,7 +406,7 @@ async function main() {
       const m = map311Row(r);
       if (!m) continue;
       kept++;
-      const key = m.parcel ? parcelKey(m.parcel) : null;
+      const key = m.parcel ? seeRaw(m.parcel) : null;
       if (key) { bucket(key).cases.push(m.case); touched.add(key); }
       else if (m.address) orphanAddr.push({ addr: normAddr(m.address), case: m.case });
     }
@@ -413,7 +421,7 @@ async function main() {
   for (const [kind, rows] of Object.entries(lists)) {
     for (const r of rows) {
       const pid = pick(r, [...FIELDS.parcelId]);
-      if (pid) touched.add(parcelKey(pid));
+      if (pid) touched.add(seeRaw(pid));
     }
     if (rows.length) report.push({ id: kind === "tax" ? "tax_delinquent" : kind === "foreclosure" ? "foreclosure_notice" : "probate", label: `${kind} list (records request)`, url: opt[kind], pulledAt, records: rows.length });
   }
@@ -428,31 +436,36 @@ async function main() {
       parcels.set(key, mapParcel(f.attributes, f.geometry, cama.get(key), pulledAt));
     }
   };
+  const sqlList = (keys) => [...new Set(keys.flatMap((k) => [...(rawIds.get(k) ?? [k])]))].map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
+  let camaAsked = 0, camaFound = 0;
   const camaFor = async (keys) => {
     const m = new Map();
     if (!L.cama.url || !keys.length) return m;
     const camaId = L.cama.idField || idField;
     for (let i = 0; i < keys.length; i += 150) {
-      const ids = keys.slice(i, i + 150).map((k) => `'${k}'`).join(",");
-      const { features } = await query(L.cama.url, `UPPER(REPLACE(REPLACE(${camaId},' ',''),'-','')) IN (${ids})`);
+      const { features } = await query(L.cama.url, `${camaId} IN (${sqlList(keys.slice(i, i + 150))})`);
       features.forEach((f) => m.set(parcelKey(pick(f.attributes, [...FIELDS.parcelId])), f.attributes));
     }
+    camaAsked += keys.length;
+    camaFound += m.size;
     return m;
   };
   const touchedList = [...touched].slice(0, opt.maxParcels);
   for (let i = 0; i < touchedList.length; i += 150) {
     const chunk = touchedList.slice(i, i + 150);
-    const ids = chunk.map((k) => `'${k}'`).join(",");
-    const { features } = await query(L.parcels.url, `UPPER(REPLACE(REPLACE(${idField},' ',''),'-','')) IN (${ids})`, { geometry: true });
+    const { features } = await query(L.parcels.url, `${idField} IN (${sqlList(chunk)})`, { geometry: true });
+    features.forEach((f) => seeRaw(pick(f.attributes, [...FIELDS.parcelId])));
     ingest(features, await camaFor(chunk));
   }
   for (const zip of opt.zips) {
     const zipField = L.parcels.zipField || "SITEZIP";
     const { features } = await query(L.parcels.url, `${zipField} LIKE '${zip}%'`, { geometry: true });
-    const keys = features.map((f) => parcelKey(pick(f.attributes, [...FIELDS.parcelId]))).filter((k) => !parcels.has(k));
+    const keys = features.map((f) => seeRaw(pick(f.attributes, [...FIELDS.parcelId]))).filter((k) => k && !parcels.has(k));
+    console.log(`  ZIP ${zip}: ${features.length} parcels`);
     const cama = await camaFor(keys);
     ingest(features, cama);
   }
+  if (L.cama.url) console.log(`  CAMA matched ${camaFound} of ${camaAsked} parcels`);
   report.push({ id: "coa_parcels", label: L.parcels.label, url: L.parcels.url, pulledAt, records: parcels.size });
 
   // 4b. Other metro counties: same mapper, each county's own parcel layer, swept by ZIP

@@ -2,30 +2,30 @@
   "note": "Layer URLs for atlanta-feed.mjs. Run `node tools/atlanta-intel/atlanta-feed.mjs --discover` to list candidates, then paste the /FeatureServer/<n> or /MapServer/<n> URL here (or set ATL_<KEY>_URL). Field names are matched by alias, so a layer rename doesn't need code changes; the run prints any field it couldn't map. County parcel layers: set counties.<name>.url (or COUNTY_<NAME>_URL) and the layer's ZIP field. Deeds come from a clerk's index CSV (--deeds), not a layer.",
   "layers": {
     "parcels": {
-      "label": "City of Atlanta tax parcels",
+      "label": "City of Atlanta lots + parcels (zoning, owner, mailing)",
       "search": [
         "coa_tax_parcels",
         "Tax Parcels"
       ],
-      "url": null,
+      "url": "https://gis.atlantaga.gov/dpcd/rest/services/OPALMapServices/Lots_Parcels_Hybrid_Beta/MapServer/0",
       "idField": "PARCELID",
-      "zipField": "SITEZIP"
+      "zipField": "SITEZIP1"
     },
     "cama": {
-      "label": "Fulton CAMA attributes (Tolemi_Parcels)",
+      "label": "Tolemi parcels (Fulton CAMA: year built, sq ft, beds, baths, homestead)",
       "search": [
         "Tolemi_Parcels"
       ],
-      "url": null,
-      "idField": null
+      "url": "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/Tolemi_Parcels/FeatureServer/0",
+      "idField": "ParcelID"
     },
     "permits": {
-      "label": "Atlanta building permits + Building Complaint records",
+      "label": "Atlanta building permits (Accela, Sept 2022 \u2192)",
       "search": [
         "Building Permits",
         "Permits"
       ],
-      "url": null
+      "url": "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/building_permit_featureLayer/FeatureServer/0"
     },
     "code_history": {
       "label": "Atlanta code enforcement 2021\u20132023",
@@ -33,7 +33,7 @@
         "Code_Enforcement_Data_2021_2023",
         "Code Enforcement"
       ],
-      "url": null
+      "url": "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/Code_Enforcement_Data_2021_2023/FeatureServer/0"
     },
     "atl311": {
       "label": "ATL311 service requests",
@@ -48,16 +48,26 @@
       "url": "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28"
     },
     "opportunity_zones": {
-      "label": "Federal Opportunity Zone tracts",
+      "label": "Federal Opportunity Zones (ARC region)",
       "search": [
         "Opportunity Zones",
         "Opportunity_Zones"
       ],
-      "url": null
+      "url": "https://services2.arcgis.com/Gqyymy5JISeLzyNM/arcgis/rest/services/Federal_Opportunity_Zones/FeatureServer/0"
     },
     "marta_gtfs": {
       "label": "MARTA GTFS rail stations",
       "url": "https://www.itsmarta.com/google_transit_feed/google_transit.zip"
+    },
+    "parcels_daily": {
+      "label": "COA tax parcels, daily owner update (reference)",
+      "url": "https://services5.arcgis.com/5RxyIIJ9boPdptdo/arcgis/rest/services/coa_tax_parcels/FeatureServer/0",
+      "note": "Current owner + mailing street, no ZIP; not yet merged"
+    },
+    "fulton_parcels": {
+      "label": "Fulton County tax parcels (official, reference)",
+      "url": "https://services1.arcgis.com/AQDHTHDrZzfsFsB5/arcgis/rest/services/Tax_Parcels/FeatureServer/0",
+      "note": "No values; candidate for county-wide sweeps outside the city"
     }
   },
   "counties": {
@@ -68,7 +78,8 @@
         "DeKalb Parcels"
       ],
       "url": null,
-      "zipField": "ZIP"
+      "zipField": "ZIP",
+      "note": "Tax_Parcels_2025 (services2.arcgis.com/IxVN2oUE9EYLSnPE) has values + zoning but no address/owner: needs a join layer before it can produce leads"
     },
     "cobb": {
       "county": "Cobb",
@@ -97,5 +108,10 @@
       "url": null,
       "zipField": "ZIP"
     }
-  }
+  },
+  "gaps": [
+    "Fulton appraised values and sale prices: not in any open layer found (qPublic / records request)",
+    "ATL311 citywide: no public layer found (only the Main Street district)",
+    "Gwinnett/Cobb/Clayton: public layers lack owner or value fields"
+  ]
 }
