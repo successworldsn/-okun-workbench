@@ -5,7 +5,7 @@ import { demoMarket, demoProperties } from "@/lib/re-intel-demo";
 import { DealDesk } from "@/components/realestate/DealDesk";
 import { embedTerrain } from "@/components/realestate/GodsEyeMap";
 // DealDesk imports @/app/realestate/actions; build.mjs aliases that path to this same shim file.
-import { registerIntel, loadLocal } from "./shims/actions";
+import { registerIntel, loadLocal, loadBuyers } from "./shims/actions";
 
 declare const __TERRAIN__: Parameters<typeof embedTerrain>[0];
 
@@ -21,6 +21,7 @@ createRoot(document.getElementById("root")!).render(
     intel={intel}
     initialStates={local.states}
     initialActivity={local.activity}
+    initialBuyers={loadBuyers()}
     meta={{
       example: true,
       generatedAt: now.toISOString(),

@@ -7,7 +7,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEMO_MODE, db } from "./supabase";
 import type { MarketContext, PropertyRecord } from "./re-intel";
-import { demoMarket, demoProperties } from "./re-intel-demo";
+import { demoBuyers, demoMarket, demoProperties } from "./re-intel-demo";
+import type { Buyer } from "./re-buyers";
 import { applyActivity, type Activity, type DeskState } from "./re-desk";
 
 export interface FeedSource {
@@ -135,4 +136,33 @@ export async function logActivity(a: Omit<Activity, "id" | "at">): Promise<DeskS
   });
   if (e2) throw e2;
   return next;
+}
+
+// ─── Buyers ─────────────────────────────────────────────────────────────────
+
+let demoBuyerList: Buyer[] | null = null;
+
+export async function getBuyers(): Promise<Buyer[]> {
+  if (DEMO_MODE) return (demoBuyerList ??= demoBuyers(new Date()));
+  const { data, error } = await db().from("re_buyers").select("data, active").order("updated_at", { ascending: false });
+  if (isMissingTable(error)) return [];
+  if (error) throw error;
+  return (data as { data: Buyer; active: boolean }[]).map((r) => ({ ...r.data, active: r.active }));
+}
+
+export async function saveBuyers(buyers: Buyer[]): Promise<void> {
+  if (DEMO_MODE) {
+    const list = (demoBuyerList ??= demoBuyers(new Date()));
+    for (const b of buyers) {
+      const k = list.findIndex((x) => x.id === b.id);
+      if (k >= 0) list[k] = b;
+      else list.unshift(b);
+    }
+    return;
+  }
+  const { error } = await db()
+    .from("re_buyers")
+    .upsert(buyers.map((b) => ({ id: b.id, data: b, active: b.active, updated_at: b.updatedAt })));
+  if (isMissingTable(error)) throw new Error("Buyer table not set up: apply the re_buyers section of schema.sql in Supabase.");
+  if (error) throw error;
 }

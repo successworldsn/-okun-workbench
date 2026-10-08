@@ -5,6 +5,7 @@
  * reads correctly. Dates are relative to `now` so the demo never goes stale.
  */
 import type { MarketContext, PropertyRecord } from "./re-intel.ts";
+import type { Buyer } from "./re-buyers.ts";
 
 const ago = (now: Date, days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
 const ahead = (now: Date, days: number) => new Date(now.getTime() + days * 86_400_000).toISOString();
@@ -188,4 +189,16 @@ export function demoMarket(now: Date): Record<string, MarketContext> {
     M("30032", 140, 199, 260, 231, 3.4, 36, 15),
   ];
   return Object.fromEntries(list.map((m) => [m.key, { ...m, asOf: ago(now, 2) }]));
+}
+
+/** Fictional buyers (EXAMPLE) so matching shows something before you add your own. */
+export function demoBuyers(now: Date): Buyer[] {
+  const b = (x: Omit<Buyer, "active" | "example" | "updatedAt">): Buyer => ({ ...x, active: true, example: true, updatedAt: now.toISOString() });
+  return [
+    b({ id: "bx-1", name: "Example Buyer A", company: "Westside Flip Co. (example)", phone: "(000) 555-0101", zips: ["30310", "30311", "30314", "30315", "30318"], counties: [], types: ["sfr"], strategies: ["flip", "wholesale"], minPrice: 40000, maxPrice: 220000, maxRehab: 120000, cash: true, pofVerified: true, closeDays: 10, dealsClosed: 2, notes: "Wants rehab-heavy westside houses. Fast closer." }),
+    b({ id: "bx-2", name: "Example Buyer B", company: "Peachtree Rentals (example)", email: "buyer-b@example.com", zips: [], counties: ["Fulton", "DeKalb"], types: ["sfr", "multi_2_4"], strategies: ["rental", "brrrr"], minPrice: 80000, maxPrice: 260000, maxRehab: 40000, minBeds: 3, cash: false, pofVerified: false, closeDays: 30, dealsClosed: 0 }),
+    b({ id: "bx-3", name: "Example Builder C", company: "Infill Homes (example)", phone: "(000) 555-0103", zips: ["30318", "30314", "30316", "30317"], counties: [], types: ["sfr", "land"], strategies: ["development", "land"], minPrice: 50000, maxPrice: 400000, cash: true, pofVerified: true, closeDays: 21, dealsClosed: 1, notes: "Teardowns, lot splits, anything near the BeltLine." }),
+    b({ id: "bx-4", name: "Example Buyer D", company: "Southside Holdings (example)", zips: ["30354", "30315", "30310", "30331"], counties: [], types: ["sfr"], strategies: ["brrrr", "rental"], minPrice: 30000, maxPrice: 150000, maxRehab: 60000, cash: true, pofVerified: false, closeDays: 14, dealsClosed: 0 }),
+    b({ id: "bx-5", name: "Example Buyer E", company: "Eastside Luxury Rehab (example)", zips: ["30312", "30316", "30317", "30307"], counties: [], types: ["sfr"], strategies: ["flip"], minPrice: 200000, maxPrice: 650000, maxRehab: 180000, cash: true, pofVerified: true, closeDays: 14, dealsClosed: 0 }),
+  ];
 }

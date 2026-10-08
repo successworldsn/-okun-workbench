@@ -7,6 +7,8 @@
 import type { Intel } from "@/lib/re-intel";
 import { nextAction, applyActivity, type ActivityKind, type Outcome, type Stage, type DeskState, type Activity } from "@/lib/re-desk";
 import { draftOutreach, planFor, COMPLIANCE, type Channel } from "@/lib/re-outreach";
+import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
+import { demoBuyers } from "@/lib/re-intel-demo";
 
 let registry = new Map<string, Intel>();
 export function registerIntel(all: Intel[]) {
@@ -53,4 +55,38 @@ export async function askOracle(parcelId: string, stage: Stage | null): Promise<
 export async function draftMessage(parcelId: string, channel: Channel, _polish?: boolean): Promise<{ text: string; compliance: string; by: "template" | "claude" }> {
   const i = registry.get(parcelId);
   return { text: i ? draftOutreach(i, channel) : "", compliance: COMPLIANCE[channel], by: "template" };
+}
+
+const BKEY = "godseye-preview-buyers-v1";
+export function loadBuyers(): Buyer[] {
+  try {
+    const j = JSON.parse(localStorage.getItem(BKEY) ?? "null");
+    if (Array.isArray(j)) return j;
+  } catch {
+    /* storage unavailable */
+  }
+  return demoBuyers(new Date());
+}
+function storeBuyers(list: Buyer[]) {
+  try {
+    localStorage.setItem(BKEY, JSON.stringify(list));
+  } catch {
+    /* storage unavailable */
+  }
+}
+export async function saveBuyer(b: Buyer): Promise<Buyer[]> {
+  if (!b.name?.trim()) throw new Error("A buyer needs a name.");
+  const list = loadBuyers();
+  const k = list.findIndex((x) => x.id === b.id);
+  const c = { ...b, updatedAt: new Date().toISOString() };
+  if (k >= 0) list[k] = c;
+  else list.unshift(c);
+  storeBuyers(list);
+  return list;
+}
+export async function importBuyers(csv: string): Promise<{ buyers: Buyer[]; added: number; errors: string[] }> {
+  const { buyers, errors } = importBuyersCsv(csv, new Date());
+  const list = [...buyers, ...loadBuyers()];
+  storeBuyers(list);
+  return { buyers: list, added: buyers.length, errors };
 }

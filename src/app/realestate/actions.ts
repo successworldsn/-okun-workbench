@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { logActivity, loadIntelData } from "@/lib/re-desk-store";
+import { logActivity, loadIntelData, saveBuyers, getBuyers } from "@/lib/re-desk-store";
+import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
 import { STAGES, nextAction, type ActivityKind, type Outcome, type Stage, type DeskState } from "@/lib/re-desk";
 import { analyze } from "@/lib/re-intel";
 import { draftOutreach, planFor, COMPLIANCE, type Channel } from "@/lib/re-outreach";
 import { complete, CLAUDE_CONFIGURED } from "@/lib/claude";
 
-const KINDS: ActivityKind[] = ["call", "sms", "email", "letter", "verify", "research", "note", "skip", "stage"];
+const KINDS: ActivityKind[] = ["call", "sms", "email", "letter", "verify", "research", "note", "skip", "stage", "buyer"];
 
 export async function logTouch(input: { parcelId: string; kind: ActivityKind; outcome: Outcome; note?: string; stage?: Stage; amount?: number | null }): Promise<DeskState> {
   if (!KINDS.includes(input.kind)) throw new Error("Unknown activity");
@@ -68,4 +69,28 @@ export async function draftMessage(parcelId: string, channel: Channel, polish: b
     600,
   );
   return { text: res.ok && res.text ? res.text : text, compliance: COMPLIANCE[channel], by: res.ok ? "claude" : "template" };
+}
+
+const clean = (b: Buyer): Buyer => ({
+  ...b,
+  name: String(b.name ?? "").slice(0, 120).trim(),
+  zips: (b.zips ?? []).filter((z) => /^\d{5}$/.test(z)),
+  counties: (b.counties ?? []).map((c) => String(c).slice(0, 40)),
+  notes: b.notes?.slice(0, 2000),
+  updatedAt: new Date().toISOString(),
+});
+
+export async function saveBuyer(b: Buyer): Promise<Buyer[]> {
+  const c = clean(b);
+  if (!c.name) throw new Error("A buyer needs a name.");
+  await saveBuyers([c]);
+  revalidatePath("/realestate/command");
+  return getBuyers();
+}
+
+export async function importBuyers(csv: string): Promise<{ buyers: Buyer[]; added: number; errors: string[] }> {
+  const { buyers, errors } = importBuyersCsv(csv.slice(0, 500_000), new Date());
+  if (buyers.length) await saveBuyers(buyers.map(clean));
+  revalidatePath("/realestate/command");
+  return { buyers: await getBuyers(), added: buyers.length, errors };
 }

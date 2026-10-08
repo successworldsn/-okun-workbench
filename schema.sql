@@ -467,7 +467,7 @@ create table re_desk_state (
 create table re_activity (
   id uuid primary key default gen_random_uuid(),
   parcel_id text not null,
-  kind text not null check (kind in ('call','sms','email','letter','verify','research','note','skip','stage')),
+  kind text not null check (kind in ('call','sms','email','letter','verify','research','note','skip','stage','buyer')),
   outcome text,
   note text,
   stage text,
@@ -480,3 +480,16 @@ create trigger re_activity_append_only before update or delete on re_activity
 
 alter table re_desk_state enable row level security;
 alter table re_activity enable row level security;
+
+-- Buyer network: your investors and what each buys (criteria kept as jsonb so
+-- the matcher in lib/re-buyers.ts can grow without migrations).
+create table re_buyers (
+  id text primary key,
+  data jsonb not null,
+  active boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+alter table re_buyers enable row level security;
+-- Already created re_activity before buyers existed? Run:
+--   alter table re_activity drop constraint re_activity_kind_check;
+--   alter table re_activity add constraint re_activity_kind_check check (kind in ('call','sms','email','letter','verify','research','note','skip','stage','buyer'));

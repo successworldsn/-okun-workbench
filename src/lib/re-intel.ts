@@ -805,6 +805,7 @@ export interface Intel {
   engines: Record<EngineKey, EngineResult>;
   value: ValueEstimate;
   comps: CompSet | null;
+  rehab: { value: number | null; tier: "light" | "medium" | "heavy" };
   score: number;
   confidence: number;
   conclusions: Conclusion[];
@@ -891,6 +892,7 @@ export function analyze(p: PropertyRecord, market: Record<string, MarketContext>
     engines,
     value: v,
     comps,
+    rehab: rehabEstimate(p, engines.distress.score),
     score,
     confidence,
     conclusions: conclusions(p, engines),

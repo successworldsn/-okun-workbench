@@ -28,14 +28,15 @@ import {
 } from "@/lib/re-desk";
 import type { FeedSource } from "@/lib/re-desk-store";
 import type { Channel } from "@/lib/re-outreach";
-import { askOracle, draftMessage, logTouch } from "@/app/realestate/actions";
+import { askOracle, draftMessage, logTouch, saveBuyer, importBuyers } from "@/app/realestate/actions";
+import { matchBuyers, dealSheet, PROP_TYPE_LABELS, BUYER_STRATEGIES, type Buyer, type BuyerMatch, type PropType } from "@/lib/re-buyers";
 import type { Basemap, MapPoint } from "./GodsEyeMap";
 
 const GodsEyeMap = dynamic(() => import("./GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
-type View = "today" | "desk" | "pipeline" | "money" | "sources";
-type Tab = "OWNER" | "PROPERTY" | "MONEY" | "ZONING" | "COMPS" | "CONTACT" | "ACTION";
-const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "ZONING", "COMPS", "CONTACT", "ACTION"];
+type View = "today" | "desk" | "pipeline" | "buyers" | "money" | "sources";
+type Tab = "OWNER" | "PROPERTY" | "MONEY" | "ZONING" | "COMPS" | "CONTACT" | "BUYERS" | "ACTION";
+const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "ZONING", "COMPS", "CONTACT", "BUYERS", "ACTION"];
 
 const money = (v: number | null | undefined) => (v == null || !isFinite(v) ? "—" : (v < 0 ? "−" : "") + "$" + Math.round(Math.abs(v)).toLocaleString("en-US"));
 const kmoney = (v: number | null | undefined) =>
@@ -94,6 +95,7 @@ export function DealDesk({
   intel,
   initialStates,
   initialActivity,
+  initialBuyers,
   meta,
   market,
   nowIso,
@@ -103,6 +105,7 @@ export function DealDesk({
   intel: Intel[];
   initialStates: Record<string, DeskState>;
   initialActivity: Activity[];
+  initialBuyers: Buyer[];
   meta: { example: boolean; generatedAt: string; sources: FeedSource[]; note?: string };
   market: Record<string, MarketContext>;
   nowIso: string;
@@ -112,6 +115,7 @@ export function DealDesk({
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [states, setStates] = useState(initialStates);
   const [activity, setActivity] = useState(initialActivity);
+  const [buyers, setBuyers] = useState(initialBuyers);
   const [mission, setMission] = useState<Mission | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("today");
@@ -140,6 +144,7 @@ export function DealDesk({
   const queue = useMemo(() => buildQueue(filter ? visible : intel, states, now, mission, 60), [intel, visible, filter, states, now, mission]);
   const stats = useMemo(() => moneyStats(intel, states), [intel, states]);
   const brief = useMemo(() => todayBrief(intel, states, activity, now), [intel, states, activity, now]);
+  const buyerMatches = useMemo(() => new Map(intel.map((i) => [i.p.id, matchBuyers(i, buyers)])), [intel, buyers]);
   const sel = selectedId ? byId.get(selectedId) ?? null : null;
   const selState = sel ? states[sel.p.id] : undefined;
   const selAction = sel ? nextAction(sel, selState, now) : null;
@@ -184,10 +189,11 @@ export function DealDesk({
     if (top) select(top.p.id);
   }
 
-  function touch(kind: ActivityKind, outcome: Outcome, opts: { stage?: Stage; amount?: number | null; advance?: boolean } = {}) {
+  function touch(kind: ActivityKind, outcome: Outcome, opts: { stage?: Stage; amount?: number | null; advance?: boolean; note?: string } = {}) {
     if (!sel) return;
     const id = sel.p.id;
-    const optimistic: Activity = { id: `local-${Date.now()}`, parcelId: id, at: new Date().toISOString(), kind, outcome, note: note || undefined, stage: opts.stage, amount: opts.amount ?? null };
+    const text = [opts.note, note].filter(Boolean).join(" · ");
+    const optimistic: Activity = { id: `local-${Date.now()}`, parcelId: id, at: new Date().toISOString(), kind, outcome, note: text || undefined, stage: opts.stage, amount: opts.amount ?? null };
     setActivity((a) => [optimistic, ...a]);
     setStates((s) => ({ ...s, [id]: applyActivity(s[id], optimistic) }));
     setNote("");
@@ -200,7 +206,7 @@ export function DealDesk({
         flash(`Not saved: ${(e as Error).message}`);
       }
     });
-    if (opts.advance !== false && kind !== "note" && kind !== "stage") {
+    if (opts.advance !== false && kind !== "note" && kind !== "stage" && kind !== "buyer") {
       const next = queue.find((q) => q.intel.p.id !== id);
       if (next) setTimeout(() => select(next.intel.p.id), 650);
     }
@@ -229,9 +235,9 @@ export function DealDesk({
         QUEUE <span className="text-bone">{queue.length}</span>
       </span>
       <nav className="flex gap-1">
-        {(["today", "desk", "pipeline", "money", "sources"] as View[]).map((v) => (
+        {(["today", "desk", "pipeline", "buyers", "money", "sources"] as View[]).map((v) => (
           <button key={v} onClick={() => setView(v)} className={`rounded px-2 py-1 uppercase ${view === v ? "bg-cyan/15 text-cyan" : "hover:text-bone"}`}>
-            {v === "today" ? "Today" : v === "desk" ? "Desk" : v === "money" ? "Money" : v === "sources" ? "Data" : "Pipeline"}
+            {v === "today" ? "Today" : v === "desk" ? "Desk" : v === "money" ? "Money" : v === "sources" ? "Data" : v === "buyers" ? "Buyers" : "Pipeline"}
           </button>
         ))}
       </nav>
@@ -279,6 +285,7 @@ export function DealDesk({
                 <div className="ml-6 flex items-center gap-2 font-mono text-[9px] tracking-wider">
                   <span className="text-ash">{i.primarySignal}</span>
                   <span className={q.due ? "text-gold" : q.action.verb === "CALL NOW" ? "text-status-red" : "text-cyan"}>{q.action.verb}</span>
+                  {(buyerMatches.get(i.p.id)?.matches.length ?? 0) > 0 && <span className="text-gold" title="Buyers on file who match">◆{buyerMatches.get(i.p.id)!.matches.length}</span>}
                   <span className="ml-auto text-muted">{i.confidence}%</span>
                 </div>
               </button>
@@ -295,6 +302,7 @@ export function DealDesk({
     <Dossier
       key={sel.p.id}
       i={sel}
+      buyerMatch={buyerMatches.get(sel.p.id) ?? { matches: [], nearMisses: [] }}
       state={selState}
       action={selAction!}
       acts={selActivity}
@@ -368,10 +376,38 @@ export function DealDesk({
             </div>
           )}
           {view !== "desk" && (
-            <div className="absolute inset-0 overflow-y-auto bg-[#02040A]/92 p-4 backdrop-blur-sm">
+            <div className="absolute inset-0 z-10 overflow-y-auto bg-[#02040A]/92 p-4 backdrop-blur-sm">
               {view === "today" && <TodayView brief={brief} onOpen={select} />}
               {view === "pipeline" && <Pipeline intel={intel} states={states} onOpen={select} />}
-              {view === "money" && <MoneyView stats={stats} />}
+              {view === "buyers" && (
+                <BuyersView
+                  buyers={buyers}
+                  counts={new Map(buyers.map((b) => [b.id, intel.filter((i) => buyerMatches.get(i.p.id)?.matches.some((m) => m.buyer.id === b.id)).length]))}
+                  pending={pending}
+                  onSave={(b) =>
+                    start(async () => {
+                      try {
+                        setBuyers(await saveBuyer(b));
+                        flash(`Saved ${b.name}`);
+                      } catch (e) {
+                        flash((e as Error).message);
+                      }
+                    })
+                  }
+                  onImport={(csv) =>
+                    start(async () => {
+                      try {
+                        const r = await importBuyers(csv);
+                        setBuyers(r.buyers);
+                        flash(`Imported ${r.added} buyer${r.added === 1 ? "" : "s"}${r.errors.length ? ` · ${r.errors.length} row(s) skipped: ${r.errors.slice(0, 2).join("; ")}` : ""}`);
+                      } catch (e) {
+                        flash((e as Error).message);
+                      }
+                    })
+                  }
+                />
+              )}
+              {view === "money" && <MoneyView stats={stats} buyers={buyers.filter((b) => b.active).length} matched={intel.filter((i) => (buyerMatches.get(i.p.id)?.matches.length ?? 0) > 0).length} />}
               {view === "sources" && <SourcesView meta={meta} now={now} shown={intel.length} total={totalProperties} />}
             </div>
           )}
@@ -409,6 +445,7 @@ export function DealDesk({
 
 function Dossier(props: {
   i: Intel;
+  buyerMatch: { matches: BuyerMatch[]; nearMisses: BuyerMatch[] };
   state: DeskState | undefined;
   action: { verb: string; why: string };
   acts: Activity[];
@@ -424,10 +461,11 @@ function Dossier(props: {
   claudeConfigured: boolean;
   onAsk: () => void;
   onDraft: (c: Channel, polish: boolean) => void;
-  onTouch: (k: ActivityKind, o: Outcome, opts?: { stage?: Stage; amount?: number | null; advance?: boolean }) => void;
+  onTouch: (k: ActivityKind, o: Outcome, opts?: { stage?: Stage; amount?: number | null; advance?: boolean; note?: string }) => void;
 }) {
   const { i, state, action, tab, setTab, now } = props;
   const [closing, setClosing] = useState(false);
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [closeAmt, setCloseAmt] = useState("");
   const p = i.p;
   const pr = priority(i.score);
@@ -464,6 +502,11 @@ function Dossier(props: {
           <span>🟡 {i.badges.INFERRED}</span>
           <span>🔴 {i.badges.STALE}</span>
           <span>· STAGE {state?.stage ?? "DISCOVERED"}</span>
+          {props.buyerMatch.matches.length > 0 && (
+            <button onClick={() => setTab("BUYERS")} className="text-gold">
+              · ◆ {props.buyerMatch.matches.length} BUYER{props.buyerMatch.matches.length > 1 ? "S" : ""} MATCH
+            </button>
+          )}
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -705,6 +748,40 @@ function Dossier(props: {
               <ContactLog acts={props.acts} />
             </>
           )}
+          {tab === "BUYERS" && (
+            <>
+              {!props.buyerMatch.matches.length && <p className="text-[11px] text-muted">No buyer on file matches every criterion. Near misses below; add buyers under Buyers.</p>}
+              {[...props.buyerMatch.matches.map((m) => ({ m, near: false })), ...props.buyerMatch.nearMisses.map((m) => ({ m, near: true }))].map(({ m, near }) => (
+                <div key={m.buyer.id} className={`mb-2 rounded border p-2 ${near ? "border-elevated" : "border-gold/30 bg-gold/5"}`}>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`font-mono text-sm font-bold ${near ? "text-ash" : "text-gold"}`}>{m.fit}</span>
+                    <span className="font-semibold text-bone">{m.buyer.name}</span>
+                    <span className="truncate text-[11px] text-ash">{m.buyer.company}</span>
+                    {near && <span className="ml-auto font-mono text-[9px] tracking-wider text-status-amber">NEAR MISS</span>}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-ash">{m.why.join(" · ")}</div>
+                  {near && <div className="text-[11px] text-status-amber">✕ {m.misses[0]}</div>}
+                  <div className="mt-1 text-[11px]">
+                    <span className="text-muted">Their likely price:</span> <span className="font-mono text-bone">{money(m.price)}</span> <span className="text-muted">· {m.priceBasis}</span>
+                  </div>
+                  {(m.buyer.phone || m.buyer.email) && <div className="select-all font-mono text-[11px] text-cyan">{[m.buyer.phone, m.buyer.email].filter(Boolean).join(" · ")}</div>}
+                  <div className="mt-1 flex gap-1 font-mono text-[10px] tracking-wider">
+                    <button onClick={() => setSheetFor(sheetFor === m.buyer.id ? null : m.buyer.id)} className="rounded border border-cyan/30 px-2 py-1 text-cyan hover:bg-cyan/10">
+                      DEAL SHEET
+                    </button>
+                    <button onClick={() => props.onTouch("buyer", "sent", { note: `Sent to ${m.buyer.name}${m.buyer.company ? ` (${m.buyer.company})` : ""}`, advance: false })} className="rounded border border-gold/40 px-2 py-1 text-gold hover:bg-gold/10">
+                      ✓ LOG SENT
+                    </button>
+                  </div>
+                  {sheetFor === m.buyer.id && (
+                    <textarea readOnly value={dealSheet(i, m)} rows={12} className="mt-2 w-full rounded border border-elevated bg-[#02040A] p-2 font-mono text-[11px] text-bone" onFocus={(e) => e.currentTarget.select()} />
+                  )}
+                </div>
+              ))}
+              <p className="mt-2 text-[10px] text-muted">The deal sheet holds property facts, ARV basis and comps, never owner details or their distress. Have a Georgia real-estate attorney review your assignment contract and how you market it.</p>
+              <ContactLog acts={props.acts.filter((a) => a.kind === "buyer")} />
+            </>
+          )}
           {tab === "ACTION" && (
             <>
               <div className="rounded border border-gold/30 bg-gold/5 p-2">
@@ -896,6 +973,160 @@ function TodayView({ brief, onOpen }: { brief: ReturnType<typeof todayBrief>; on
   );
 }
 
+const EMPTY_BUYER = (): Buyer => ({ id: `b-${Date.now().toString(36)}`, name: "", zips: [], counties: [], types: ["sfr"], strategies: ["flip"], cash: false, pofVerified: false, active: true, updatedAt: new Date().toISOString() });
+
+function BuyersView({ buyers, counts, pending, onSave, onImport }: { buyers: Buyer[]; counts: Map<string, number>; pending: boolean; onSave: (b: Buyer) => void; onImport: (csv: string) => void }) {
+  const [edit, setEdit] = useState<Buyer | null>(null);
+  const [csv, setCsv] = useState("");
+  const n = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[$,\s]/g, "")) || null);
+  const inp = "w-full rounded border border-elevated bg-[#02040A] px-2 py-1 text-[12px] text-bone";
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h2 className="font-mono text-[11px] tracking-[0.3em] text-cyan">BUYER NETWORK</h2>
+        <span className="text-[11px] text-ash">{buyers.filter((b) => b.active).length} active · matched against every property on the desk</span>
+        <button onClick={() => setEdit(EMPTY_BUYER())} className="ml-auto rounded bg-gold/20 px-3 py-1 font-mono text-[10px] tracking-widest text-gold hover:bg-gold/30">
+          + ADD BUYER
+        </button>
+      </div>
+      {edit && (
+        <form
+          className="mt-3 grid grid-cols-2 gap-2 rounded border border-gold/30 bg-[#050912] p-3 md:grid-cols-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave(edit);
+            setEdit(null);
+          }}
+        >
+          {(
+            [
+              ["name", "Name"],
+              ["company", "Company"],
+              ["phone", "Phone"],
+              ["email", "Email"],
+            ] as const
+          ).map(([k, l]) => (
+            <label key={k} className="text-[10px] text-muted">
+              {l}
+              <input id={`bf-${k}`} required={k === "name"} value={edit[k] ?? ""} onChange={(e) => setEdit({ ...edit, [k]: e.target.value })} className={inp} />
+            </label>
+          ))}
+          <label className="col-span-2 text-[10px] text-muted">
+            ZIPs (space or comma)
+            <input id="bf-zips" value={edit.zips.join(" ")} onChange={(e) => setEdit({ ...edit, zips: e.target.value.split(/[\s,;]+/).filter(Boolean) })} className={inp} />
+          </label>
+          <label className="col-span-2 text-[10px] text-muted">
+            Counties (if no ZIPs)
+            <input id="bf-counties" value={edit.counties.join(", ")} onChange={(e) => setEdit({ ...edit, counties: e.target.value.split(/[,;]+/).map((x) => x.trim()).filter(Boolean) })} className={inp} />
+          </label>
+          {(
+            [
+              ["minPrice", "Min price"],
+              ["maxPrice", "Max price"],
+              ["maxRehab", "Max rehab"],
+              ["closeDays", "Closes in (days)"],
+            ] as const
+          ).map(([k, l]) => (
+            <label key={k} className="text-[10px] text-muted">
+              {l}
+              <input id={`bf-${k}`} inputMode="decimal" value={edit[k] ?? ""} onChange={(e) => setEdit({ ...edit, [k]: n(e.target.value) })} className={`${inp} font-mono`} />
+            </label>
+          ))}
+          <fieldset className="col-span-2 text-[10px] text-muted">
+            Property types
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(Object.keys(PROP_TYPE_LABELS) as PropType[]).map((t) => (
+                <button type="button" key={t} onClick={() => setEdit({ ...edit, types: edit.types.includes(t) ? edit.types.filter((x) => x !== t) : [...edit.types, t] })} className={`rounded border px-2 py-0.5 ${edit.types.includes(t) ? "border-cyan bg-cyan/15 text-cyan" : "border-elevated text-ash"}`}>
+                  {PROP_TYPE_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="col-span-2 text-[10px] text-muted">
+            Buys for
+            <div className="mt-1 flex flex-wrap gap-1">
+              {BUYER_STRATEGIES.map((t) => (
+                <button type="button" key={t} onClick={() => setEdit({ ...edit, strategies: edit.strategies.includes(t) ? edit.strategies.filter((x) => x !== t) : [...edit.strategies, t] })} className={`rounded border px-2 py-0.5 ${edit.strategies.includes(t) ? "border-cyan bg-cyan/15 text-cyan" : "border-elevated text-ash"}`}>
+                  {STRATEGY_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <label className="flex items-center gap-2 text-[11px] text-ash">
+            <input id="bf-cash" type="checkbox" checked={edit.cash} onChange={(e) => setEdit({ ...edit, cash: e.target.checked })} /> Cash buyer
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-ash">
+            <input id="bf-pof" type="checkbox" checked={edit.pofVerified} onChange={(e) => setEdit({ ...edit, pofVerified: e.target.checked })} /> Proof of funds verified
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-ash">
+            <input id="bf-active" type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} /> Active
+          </label>
+          <label className="col-span-2 text-[10px] text-muted md:col-span-4">
+            Notes
+            <input id="bf-notes" value={edit.notes ?? ""} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} className={inp} />
+          </label>
+          <div className="col-span-2 flex gap-2 md:col-span-4">
+            <button disabled={pending} className="rounded bg-gold/20 px-4 py-1.5 font-mono text-[10px] tracking-widest text-gold hover:bg-gold/30 disabled:opacity-50">
+              SAVE BUYER
+            </button>
+            <button type="button" onClick={() => setEdit(null)} className="rounded border border-elevated px-4 py-1.5 font-mono text-[10px] tracking-widest text-ash">
+              CANCEL
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="text-left font-mono text-[9px] tracking-wider text-muted">
+              <th className="py-1">BUYER</th>
+              <th>AREA</th>
+              <th>BUYS</th>
+              <th className="text-right">PRICE</th>
+              <th className="text-right">MAX REHAB</th>
+              <th>FUNDS</th>
+              <th className="text-right">MATCHES</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {buyers.map((b) => (
+              <tr key={b.id} className={`border-t border-elevated/60 align-top ${b.active ? "" : "opacity-40"}`}>
+                <td className="py-1.5 pr-2">
+                  <div className="text-bone">{b.name}</div>
+                  <div className="text-[10px] text-muted">{b.company}</div>
+                </td>
+                <td className="pr-2 font-mono text-ash">{b.zips.length ? b.zips.join(" ") : b.counties.join(", ") || "any"}</td>
+                <td className="pr-2 text-ash">
+                  {b.types.map((t) => PROP_TYPE_LABELS[t]).join(", ")}
+                  <div className="text-[10px] text-muted">{b.strategies.map((t) => STRATEGY_LABELS[t]).join(", ")}</div>
+                </td>
+                <td className="pr-2 text-right font-mono text-ash">
+                  {b.minPrice != null && b.maxPrice != null ? `${kmoney(b.minPrice)}–${kmoney(b.maxPrice)}` : b.maxPrice != null ? `up to ${kmoney(b.maxPrice)}` : b.minPrice != null ? `${kmoney(b.minPrice)}+` : "any"}
+                </td>
+                <td className="pr-2 text-right font-mono text-ash">{kmoney(b.maxRehab)}</td>
+                <td className="pr-2 text-ash">{b.pofVerified ? "POF ✓" : b.cash ? "cash" : "financed"}{b.closeDays ? ` · ${b.closeDays}d` : ""}</td>
+                <td className="pr-2 text-right font-mono text-gold">{counts.get(b.id) ?? 0}</td>
+                <td className="text-right">
+                  <button onClick={() => setEdit(b)} className="font-mono text-[10px] text-cyan hover:underline">
+                    EDIT
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-5 font-mono text-[9px] tracking-[0.25em] text-muted">IMPORT FROM A SPREADSHEET</div>
+      <p className="mt-1 text-[11px] text-ash">Paste rows with a header. Recognized columns: Name, Company, Phone, Email, ZIPs, Counties, Types, Strategies, Min Price, Max Price, Max Rehab, Min Beds, Cash, POF, Close Days, Notes.</p>
+      <textarea id="bf-csv" value={csv} onChange={(e) => setCsv(e.target.value)} rows={4} placeholder={"Name,Company,Phone,ZIPs,Types,Strategies,Max Price,Max Rehab,Cash,POF\nJane Doe,JD Homes,404-555-0000,30310 30314,SFR,fix and flip,225k,75k,yes,yes"} className="mt-1 w-full rounded border border-elevated bg-[#02040A] p-2 font-mono text-[11px] text-bone placeholder:text-muted" />
+      <button disabled={!csv.trim() || pending} onClick={() => { onImport(csv); setCsv(""); }} className="mt-1 rounded bg-cyan/15 px-3 py-1 font-mono text-[10px] tracking-widest text-cyan hover:bg-cyan/25 disabled:opacity-40">
+        IMPORT BUYERS
+      </button>
+    </div>
+  );
+}
+
 function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<string, DeskState>; onOpen: (id: string) => void }) {
   const cols = STAGES.filter((s) => s !== "DEAD");
   return (
@@ -928,8 +1159,10 @@ function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<st
   );
 }
 
-function MoneyView({ stats }: { stats: ReturnType<typeof moneyStats> }) {
+function MoneyView({ stats, buyers, matched }: { stats: ReturnType<typeof moneyStats>; buyers: number; matched: number }) {
   const tiles: [string, string][] = [
+    ["Buyers on file", String(buyers)],
+    ["Properties with a buyer", String(matched)],
     ["Opportunities", stats.opportunities.toLocaleString()],
     ["High priority", stats.highPriority.toLocaleString()],
     ["Estimated equity", kmoney(stats.estimatedEquity)],

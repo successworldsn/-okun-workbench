@@ -114,6 +114,20 @@ automatically, `CENSUS_API_KEY` optional) adds a ZIP median rent as a
 cross-check (the "Rent" conclusion is corroborated only when they agree within
 35%) plus 5-year population, income and rent growth for the market engine.
 
+**Buyer network** (`lib/re-buyers.ts`, Buyers view + dossier BUYERS tab): your
+investors and what each buys (ZIPs or counties, property types, strategies,
+price range, max rehab, min beds, cash / proof of funds, closing speed, deals
+closed with you). Every property is matched against every active buyer:
+the price each buyer would likely pay is computed from their strategy (flippers
+and BRRRR buyers: ARV × 70% − rehab; rental buyers: as-is value; builders: land
+value), hard criteria must all pass, and fit ranks matches by strategy fit,
+proof of funds, speed and track record. Buyers who miss by exactly one
+criterion show as near misses with the gap ("$12,000 over their maximum").
+DEAL SHEET drafts what you send (property facts, ARV basis, renovated comps;
+never owner details or their distress) and LOG SENT records it without
+touching the owner follow-up cadence. Add buyers one at a time or paste a
+spreadsheet. Stored in `re_buyers` (see `schema.sql`).
+
 **Today** (the desk's opening view): follow-ups due, new signals this week, the
 next Georgia foreclosure sale (first Tuesday; Wednesday when that is Jan 1 or
 Jul 4) with the properties noticed for it, probate in the last 90 days, the top

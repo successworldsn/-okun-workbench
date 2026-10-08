@@ -23,7 +23,7 @@ export const STAGES = [
 export type Stage = (typeof STAGES)[number];
 export const OPEN_STAGES: Stage[] = ["DISCOVERED", "RESEARCHING", "CONTACTED", "CONVERSATION", "OPPORTUNITY", "NEGOTIATION", "CONTRACT"];
 
-export type ActivityKind = "call" | "sms" | "email" | "letter" | "verify" | "research" | "note" | "skip" | "stage";
+export type ActivityKind = "call" | "sms" | "email" | "letter" | "verify" | "research" | "note" | "skip" | "stage" | "buyer";
 export type Outcome = "attempted" | "no_answer" | "left_message" | "reached" | "interested" | "not_interested" | "wrong_number" | "sent" | "done" | null;
 
 export interface Activity {
@@ -56,6 +56,7 @@ export const ACTION_LABELS: Record<ActivityKind, string> = {
   note: "Note",
   skip: "Skip",
   stage: "Stage",
+  buyer: "Sent to buyer",
 };
 
 const DAY = 86_400_000;
@@ -93,7 +94,8 @@ export function applyActivity(state: DeskState | undefined, a: Activity): DeskSt
   return {
     ...base,
     stage,
-    nextFollowUp: a.kind === "note" ? base.nextFollowUp : fd == null ? null : addDays(a.at, fd),
+    // Notes and buyer sends don't touch the owner follow-up cadence.
+    nextFollowUp: a.kind === "note" || a.kind === "buyer" ? base.nextFollowUp : fd == null ? null : addDays(a.at, fd),
     snoozedUntil: a.kind === "skip" ? addDays(a.at, 30) : base.snoozedUntil,
     closedAmount: stage === "CLOSED" && a.amount != null ? a.amount : base.closedAmount,
     updatedAt: a.at,
