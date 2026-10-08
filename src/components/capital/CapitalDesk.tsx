@@ -257,35 +257,30 @@ export function CapitalDesk({
   );
 
   // ─── MONEY / ACTION / CONTROL ───
+  // ─── One sentence, four monuments (Design Council: money is a monument, the abnormal is brightest) ───
+  const genMw = sites.reduce((t, i) => t + (i.site.power.onsiteGenerationMw ?? 0), 0);
+  const strong = sites.filter((i) => i.score >= 50).length;
+  const lead = sites[0];
+  const sentence = alerts.length
+    ? `${alerts.length} ${alerts.length === 1 ? "thing needs" : "things need"} you. ${alerts[0].title}.`
+    : lead
+      ? `Nothing needs you yet. ${cleanName(lead.site.name)} is the strongest power node on the map today.`
+      : "Nothing needs you yet.";
+  const Monument = ({ k, v, sub, tone = "" }: { k: string; v: string; sub: string; tone?: string }) => (
+    <div className="mat-chrome min-w-0 rounded-[6px] px-4 py-3">
+      <div className="eyebrow">{k}</div>
+      <div className={`monument mt-1.5 ${tone}`}>{v}</div>
+      <div className="mt-1 truncate text-[12px] text-[#BDB6D2]">{sub}</div>
+    </div>
+  );
   const mac = (
-    <div className="grid shrink-0 grid-cols-1 gap-2 border-b border-cyan/10 bg-[#050912] p-2 md:grid-cols-3">
-      <div className="rounded border border-gold/30 p-2">
-        <div className="font-mono text-[9px] tracking-[0.3em] text-gold">🔥 MONEY</div>
-        <div className="mt-1 flex items-baseline gap-3">
-          <span className="font-mono text-xl font-bold text-bone">{fmtUsd(pipelineValue)}</span>
-          <span className="text-[11px] text-ash">in {activeDeals.length} live deal{activeDeals.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="text-[11px] text-ash">Powered-land uplift on the map: {fmtUsd(upliftOnMap)} (screen)</div>
-      </div>
-      <div className="rounded border border-cyan/30 p-2">
-        <div className="font-mono text-[9px] tracking-[0.3em] text-cyan">⚡ ACTION</div>
-        <div className="mt-1 flex items-baseline gap-3">
-          <span className="font-mono text-xl font-bold text-bone">{alerts.length}</span>
-          <span className="text-[11px] text-ash">need you · {queue.filter((q) => q.status === "cleared").length} cleared to run underneath</span>
-        </div>
-        {alerts[0] && (
-          <button onClick={() => setView("command")} className="truncate text-left text-[11px] text-cyan hover:underline">
-            Top: {alerts[0].title}
-          </button>
-        )}
-      </div>
-      <div className="rounded border border-status-red/30 p-2">
-        <div className="font-mono text-[9px] tracking-[0.3em] text-status-red">👑 CONTROL</div>
-        <div className="mt-1 flex items-baseline gap-3">
-          <span className="font-mono text-xl font-bold text-bone">{control}</span>
-          <span className="text-[11px] text-ash">decisions only you can make</span>
-        </div>
-        <div className="text-[11px] text-ash">Binding terms, money, ownership and licensed activity always stop here.</div>
+    <div className="lit shrink-0 border-b border-white/5 px-4 pb-3 pt-3">
+      <p className="headline text-[22px] leading-tight text-[#F6F3FC] md:text-[26px]">{sentence}</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <Monument k="Live pipeline" v={fmtUsd(pipelineValue)} sub={activeDeals.length ? `${activeDeals.length} live deal${activeDeals.length === 1 ? "" : "s"}` : "No deals yet · open a site and start one"} />
+        <Monument k="Generation on the map" v={genMw >= 1000 ? `${(genMw / 1000).toFixed(1)} GW` : `${genMw} MW`} sub={`${sites.length} power nodes · ${capital.length} capital sources`} tone={genMw ? "" : "monument-cool"} />
+        <Monument k="Sites scoring 50+" v={String(strong)} sub={lead ? `Top: ${cleanName(lead.site.name)} · ${lead.score}` : "—"} tone="monument-cool" />
+        <Monument k="Only you decide" v={String(control)} sub="Binding terms, money, ownership, licensed work" tone={control ? "monument-alarm" : "monument-cool"} />
       </div>
     </div>
   );
@@ -306,7 +301,7 @@ export function CapitalDesk({
   );
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-[#02040A] text-bone">
+    <div className="council fixed inset-0 z-30 flex flex-col text-bone">
       {header}
       {example && <div className="shrink-0 bg-status-amber/10 px-3 py-1 text-center font-mono text-[10px] tracking-wider text-status-amber">EXAMPLE DATA: every site, party, fund, signal and offer is fictional. Your deals, notes and approvals stay in this browser.</div>}
       {!example && feed && (
@@ -319,10 +314,10 @@ export function CapitalDesk({
       {layerBar}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <aside className="order-2 flex max-h-[34vh] min-h-0 w-full flex-col border-r border-cyan/10 bg-[#050912]/90 lg:order-1 lg:max-h-none lg:w-[300px]">
-          <div className="px-3 pb-1 pt-2 font-mono text-[10px] tracking-[0.25em] text-muted">⚡ CEO ALERTS · {alerts.length}</div>
+          <div className={`eyebrow px-3 pb-1 pt-3 ${alerts.length ? "!text-[#FF6B8B]" : ""}`}>Attention required · {alerts.length}</div>
           <div className="max-h-[42%] overflow-y-auto px-2">
             {alerts.map((a) => (
-              <div key={a.id} className={`mb-1.5 rounded border p-2 text-[11px] ${TEMP_CLS[a.temperature]}`}>
+              <div key={a.id} className={`mb-2 rounded-[6px] p-2.5 text-[11px] ${a.temperature === "RED" ? "mat-alarm" : a.temperature === "YELLOW" ? "mat-gold" : "mat-chrome"}`}>
                 <div className="font-semibold text-bone">{a.title}</div>
                 {a.body.slice(0, 2).map((b) => (
                   <div key={b} className="text-ash">
@@ -341,7 +336,7 @@ export function CapitalDesk({
             ))}
             {!alerts.length && <p className="px-1 text-[11px] text-muted">Nothing needs you. The machine is working.</p>}
           </div>
-          <div className="px-3 pb-1 pt-2 font-mono text-[10px] tracking-[0.25em] text-muted">🔥 HOT OPPORTUNITIES</div>
+          <div className="eyebrow px-3 pb-1.5 pt-3">Strongest sites</div>
           <ol className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
             {visible.slice(0, 120).map((i, n) => {
               const fuel = fuelOf(i.site);
@@ -350,10 +345,10 @@ export function CapitalDesk({
                 <li key={i.site.id} className={n < 12 ? "ge-rise" : undefined} style={n < 12 ? { animationDelay: `${n * 35}ms` } : undefined}>
                   <button
                     onClick={() => { setSelId(i.site.id); setView("command"); setTab("WHY"); }}
-                    className={`group mb-1.5 flex w-full items-stretch gap-2 overflow-hidden rounded border text-left transition-colors ${selId === i.site.id ? "border-gold/70 bg-gold/10" : "border-elevated/60 bg-[#070C17] hover:border-cyan/40"}`}
+                    className={`group mb-1.5 flex w-full items-stretch gap-2 overflow-hidden rounded-[6px] text-left transition-shadow ${selId === i.site.id ? "mat-gold" : "mat-obsidian hover:shadow-[inset_0_0_0_1px_rgba(244,183,64,.35)]"}`}
                   >
                     <SatFrame site={i.site} compact className="w-[92px] shrink-0">
-                      <span className="absolute left-1 top-1 rounded-sm bg-[#02040A]/80 px-1 font-mono text-[9px] text-muted">{String(n + 1).padStart(2, "0")}</span>
+                      <span className="monument absolute bottom-0.5 left-1.5 !text-[26px] [text-shadow:none]">{n + 1}</span>
                     </SatFrame>
                     <div className="min-w-0 flex-1 py-1.5">
                       <div className="truncate text-[12px] font-semibold text-bone">{cleanName(i.site.name)}</div>
@@ -489,11 +484,11 @@ function Dossier({ i, tab, setTab, now, team, queue, onRunTeam, onStartDeal, onQ
           ))}
         </div>
         <div className="mt-2 flex gap-1 font-mono text-[10px] tracking-wider">
-          <button onClick={onStartDeal} className="rounded bg-gold/20 px-3 py-1.5 text-gold hover:bg-gold/30">
-            ⚡ START DEAL
+          <button onClick={onStartDeal} className="pill px-4 py-2 text-[11px]">
+            Start the deal
           </button>
-          <button onClick={onRunTeam} className="rounded border border-cyan/30 px-3 py-1.5 text-cyan hover:bg-cyan/10">
-            RUN DEAL TEAM
+          <button onClick={onRunTeam} className="pill pill-chrome px-4 py-2 text-[11px]">
+            Run the deal team
           </button>
         </div>
       </div>

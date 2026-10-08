@@ -34,6 +34,7 @@ import { buildOffer, offerLetter, DEFAULT_OFFER, type OfferSettings } from "@/li
 import { newContract, deadlines, progress, upcomingDeadlines, type Contract, type Severity } from "@/lib/re-contract";
 import { matchBuyers, dealSheet, PROP_TYPE_LABELS, BUYER_STRATEGIES, type Buyer, type BuyerMatch, type PropType } from "@/lib/re-buyers";
 import type { Basemap, MapPoint } from "./GodsEyeMap";
+import { ScoreRing, Radar, Donut, Legend, HBars, Histogram } from "@/components/capital/viz";
 
 const GodsEyeMap = dynamic(() => import("./GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
@@ -397,21 +398,30 @@ export function DealDesk({
       onTouch={touch}
     />
   ) : (
-    <div className="grid h-full place-items-center p-6 text-center">
-      <div>
-        <div className="font-mono text-[10px] tracking-[0.3em] text-muted">NO TARGET</div>
-        <p className="mt-2 text-sm text-ash">Pick a dot on the map or press START on the queue.</p>
-        {queue[0] && (
-          <button onClick={() => select(queue[0].intel.p.id)} className="mt-4 rounded-control bg-gold/20 px-4 py-2 font-mono text-xs tracking-widest text-gold hover:bg-gold/30">
-            OPEN #1 · {queue[0].intel.p.address}
+    <div className="lit grid h-full place-items-center p-6">
+      {queue[0] ? (
+        <div className="w-full max-w-sm">
+          <div className="eyebrow">Your next property</div>
+          <div className="mt-3 flex items-center gap-3">
+            <ScoreRing value={queue[0].intel.score} size={72} stroke={6} sub="SCORE" />
+            <div className="min-w-0">
+              <div className="headline truncate text-[26px] leading-none text-[#F6F3FC]">{queue[0].intel.p.address}</div>
+              <div className="mt-1 text-[12px] text-[#BDB6D2]">{queue[0].intel.primarySignal} · equity {kmoney(queue[0].intel.value.equity)}</div>
+            </div>
+          </div>
+          <p className="mt-3 text-[13px] leading-relaxed text-[#BDB6D2]">{queue[0].intel.why}</p>
+          <button onClick={() => select(queue[0].intel.p.id)} className="pill mt-4 px-5 py-2 text-[11px]">
+            Open the dossier
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <p className="headline text-[22px] text-[#BDB6D2]">The queue is clear.</p>
+      )}
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-[#02040A] text-bone">
+    <div className="council fixed inset-0 z-30 flex flex-col text-bone">
       {header}
       {(meta.example || meta.note) && (
         <div className="shrink-0 bg-status-amber/10 px-3 py-1 text-center font-mono text-[10px] tracking-wider text-status-amber">
@@ -452,8 +462,8 @@ export function DealDesk({
             </div>
           )}
           {view !== "desk" && (
-            <div className="absolute inset-0 z-10 overflow-y-auto bg-[#02040A]/92 p-4 backdrop-blur-sm">
-              {view === "today" && <TodayView brief={brief} onOpen={select} deadlines={dueSoon} />}
+            <div className={`absolute inset-0 z-10 overflow-y-auto p-4 ${view === "today" ? "bg-[#06070c]/80 backdrop-blur-[2px]" : "bg-[#02040A]/92 backdrop-blur-sm"}`}>
+              {view === "today" && <TodayView brief={brief} onOpen={select} deadlines={dueSoon} intel={intel} states={states} />}
               {view === "pipeline" && <Pipeline intel={intel} states={states} onOpen={select} contracts={contractFor} now={now} />}
               {view === "buyers" && (
                 <BuyersView
@@ -1107,80 +1117,155 @@ function ContactLog({ acts }: { acts: Activity[] }) {
 
 // ─── Pipeline / Money / Sources ───────────────────────────────────────────────
 
-function TodayView({ brief, onOpen, deadlines: due }: { brief: ReturnType<typeof todayBrief>; onOpen: (id: string) => void; deadlines: ReturnType<typeof upcomingDeadlines> }) {
-  const start = brief.due[0]?.intel ?? brief.top[0]?.intel;
-  const when = new Date(`${brief.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
-  const tiles: [string, string, string][] = [
-    ["Follow-ups due", String(brief.due.length), brief.due.length ? "do these first" : "none due"],
-    ["New signals · 7 days", String(brief.newSignals.length), "untouched properties"],
-    ["Next foreclosure sale", brief.saleDate.slice(5).replace("-", "/"), `${brief.daysToSale} days · first Tuesday`],
-    ["Probate · 90 days", String(brief.probate.length), "estates with real property"],
-    ["Contract deadlines", String(due.length), due.length ? `next: ${due[0].label.toLowerCase()} ${due[0].daysLeft < 0 ? "OVERDUE" : `in ${due[0].daysLeft}d`}` : "none in 7 days"],
-  ];
-  const Row = ({ i, tag }: { i: Intel; tag: string }) => (
+const MISSION_COLOR: Record<Mission, string> = { hot: "#EF4444", equity: "#C9A84C", distress: "#F97316", develop: "#A78BFA", absentee: "#38BDF8", new: "#10B981" };
+
+/** A lead as a card: score ring, address, signal chip, equity bar. */
+function LeadCard({ i, tag, tone = "#06B6D4", onOpen }: { i: Intel; tag: string; tone?: string; onOpen: (id: string) => void }) {
+  const eq = i.value.equityPct != null ? i.value.equityPct * 100 : null;
+  return (
     <li>
-      <button onClick={() => onOpen(i.p.id)} className="flex w-full items-baseline gap-3 rounded px-2 py-1.5 text-left hover:bg-elevated/70">
-        <span className="w-8 font-mono text-[13px] font-bold text-bone">{i.score}</span>
-        <span className="min-w-0 flex-1 truncate text-[12px] text-bone">{i.p.address}</span>
-        <span className="font-mono text-[10px] tracking-wider text-cyan">{tag}</span>
+      <button onClick={() => onOpen(i.p.id)} className="mat-obsidian flex w-full items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-left transition-shadow hover:shadow-[inset_0_0_0_1px_rgba(244,183,64,.35)]">
+        <ScoreRing value={i.score} size={36} stroke={3} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold text-bone">{i.p.address}</span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className="rounded-sm px-1 font-mono text-[8.5px] uppercase tracking-wider" style={{ color: tone, background: `${tone}1A` }}>{tag}</span>
+            {eq != null && (
+              <span className="flex flex-1 items-center gap-1">
+                <span className="relative h-1 flex-1 overflow-hidden rounded-sm bg-elevated">
+                  <span className="absolute inset-y-0 left-0 bg-gold" style={{ width: `${Math.max(0, Math.min(100, eq))}%` }} />
+                </span>
+                <span className="font-mono text-[9px] tabular-nums text-ash">{Math.round(eq)}% eq</span>
+              </span>
+            )}
+          </span>
+        </span>
       </button>
     </li>
   );
+}
+
+function TodayView({ brief, onOpen, deadlines: due, intel, states }: { brief: ReturnType<typeof todayBrief>; onOpen: (id: string) => void; deadlines: ReturnType<typeof upcomingDeadlines>; intel: Intel[]; states: Record<string, DeskState> }) {
+  const start = brief.due[0]?.intel ?? brief.top[0]?.intel;
+  const when = new Date(`${brief.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+  const missionSlices = MISSIONS.map((m) => ({ label: m.label, value: intel.filter((i) => i.missions.includes(m.key)).length, color: MISSION_COLOR[m.key] })).filter((x) => x.value > 0);
+  const stageRows = STAGES.filter((st) => st !== "DEAD" as never).map((st) => ({ label: st[0] + st.slice(1).toLowerCase(), value: intel.filter((i) => (states[i.p.id]?.stage ?? "DISCOVERED") === st).length }));
+  const equityTotal = intel.reduce((t, i) => t + Math.max(0, i.value.equity ?? 0), 0);
+  const attention = brief.due.length + due.length;
+  const sentence = due.length
+    ? `${due.length} contract deadline${due.length === 1 ? "" : "s"} this week. ${due[0].label} on ${due[0].contract.address} first.`
+    : brief.due.length
+      ? `${brief.due.length} follow-up${brief.due.length === 1 ? " is" : "s are"} due. Start with ${brief.due[0].intel.p.address}.`
+      : start
+        ? `Nothing is overdue. Your first call is ${start.p.address}.`
+        : "Nothing is overdue. The queue is clear.";
+  const Monument = ({ k, v, sub, tone = "" }: { k: string; v: string; sub: string; tone?: string }) => (
+    <div className="mat-chrome min-w-0 rounded-[6px] px-4 py-3">
+      <div className="eyebrow">{k}</div>
+      <div className={`monument mt-1.5 ${tone}`}>{v}</div>
+      <div className="mt-1 truncate text-[12px] text-[#BDB6D2]">{sub}</div>
+    </div>
+  );
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="font-mono text-[10px] tracking-[0.3em] text-muted">COMMAND CENTER · {when.toUpperCase()}</div>
-      <h2 className="mt-1 font-display text-2xl font-bold">
-        {brief.due.length + brief.top.length} on the desk today
-        {brief.touchedYesterday ? <span className="ml-2 text-sm font-normal text-ash">· {brief.touchedYesterday} touches in the last 24 h</span> : null}
-      </h2>
-      {due.length > 0 && (
-        <div className="mt-4 rounded border border-status-red/30 bg-status-red/5 p-2">
-          <div className="font-mono text-[9px] tracking-[0.25em] text-status-red">CONTRACT DEADLINES · NEXT 7 DAYS</div>
-          <ul className="mt-1">
+    <div className="lit mx-auto max-w-5xl">
+      <div className="eyebrow">Command center · {when}</div>
+      <p className="headline mt-1 text-[26px] leading-tight text-[#F6F3FC] md:text-[32px]">{sentence}</p>
+      {brief.touchedYesterday ? <div className="mt-1 text-[12px] text-[#BDB6D2]">{brief.touchedYesterday} touches in the last 24 hours</div> : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <Monument k="Equity on the map" v={kmoney(equityTotal)} sub={`${intel.length} properties scored`} />
+        <Monument k="On the desk today" v={String(brief.due.length + brief.top.length)} sub={`${brief.newSignals.length} new signals this week`} tone="monument-cool" />
+        <Monument k="Foreclosure sale" v={`${brief.daysToSale}d`} sub={`${brief.saleDate.slice(5).replace("-", "/")} · ${brief.onTheSale.length} on the list`} tone={brief.daysToSale <= 7 ? "monument-alarm" : "monument-cool"} />
+        <Monument k="Needs you" v={String(attention)} sub={attention ? "follow-ups and contract deadlines" : "nothing overdue"} tone={attention ? "monument-alarm" : "monument-cool"} />
+      </div>
+
+      {attention > 0 && (
+        <div className="mat-alarm mt-3 rounded-[6px] p-3">
+          <div className="eyebrow !text-[#FFB3C1]">Attention required</div>
+          <ul className="mt-1.5 grid gap-1">
             {due.map((d) => (
               <li key={d.contract.parcelId + d.key}>
-                <button onClick={() => onOpen(d.contract.parcelId)} className="flex w-full items-baseline gap-3 rounded px-2 py-1 text-left text-[12px] hover:bg-elevated/70">
-                  <span className={`w-20 font-mono text-[11px] font-bold ${SEV_CLS[d.severity]}`}>{d.daysLeft < 0 ? `${-d.daysLeft}d LATE` : d.daysLeft === 0 ? "TODAY" : `${d.daysLeft}d`}</span>
+                <button onClick={() => onOpen(d.contract.parcelId)} className="flex w-full items-baseline gap-3 rounded px-2 py-1 text-left text-[13px] hover:bg-white/5">
+                  <span className={`w-20 font-mono text-[12px] font-bold ${SEV_CLS[d.severity]}`}>{d.daysLeft < 0 ? `${-d.daysLeft}d LATE` : d.daysLeft === 0 ? "TODAY" : `${d.daysLeft}d`}</span>
                   <span className="text-bone">{d.label}</span>
-                  <span className="min-w-0 flex-1 truncate text-ash">{d.contract.address}</span>
-                  <span className="font-mono text-[10px] text-muted">{d.date}</span>
+                  <span className="min-w-0 flex-1 truncate text-[#BDB6D2]">{d.contract.address}</span>
+                </button>
+              </li>
+            ))}
+            {brief.due.map((q) => (
+              <li key={q.intel.p.id}>
+                <button onClick={() => onOpen(q.intel.p.id)} className="flex w-full items-baseline gap-3 rounded px-2 py-1 text-left text-[13px] hover:bg-white/5">
+                  <span className="w-20 font-mono text-[12px] font-bold text-[#FF6B8B]">FOLLOW UP</span>
+                  <span className="text-bone">{q.intel.p.address}</span>
+                  <span className="min-w-0 flex-1 truncate text-[#BDB6D2]">due {day(q.state?.nextFollowUp)}</span>
                 </button>
               </li>
             ))}
           </ul>
         </div>
       )}
-      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-        {tiles.map(([k, v, sub]) => (
-          <div key={k} className="rounded border border-cyan/15 bg-[#050912] p-3">
-            <div className="font-mono text-[9px] tracking-[0.2em] text-muted">{k.toUpperCase()}</div>
-            <div className="mt-1 font-mono text-2xl font-bold text-bone">{v}</div>
-            <div className="text-[10px] text-ash">{sub}</div>
-          </div>
-        ))}
-      </div>
+
       {start && (
-        <button onClick={() => onOpen(start.p.id)} className="mt-4 w-full rounded-control bg-gold/20 py-3 font-mono text-sm font-bold tracking-[0.25em] text-gold hover:bg-gold/30">
-          START MY DAY ▸ {start.p.address}
+        <button onClick={() => onOpen(start.p.id)} className="mat-gold group mt-4 grid w-full grid-cols-1 items-center gap-4 overflow-hidden rounded-[6px] p-4 text-left md:grid-cols-[auto_1fr_auto]">
+          <ScoreRing value={start.score} size={92} stroke={7} sub="SCORE" />
+          <div className="min-w-0">
+            <span className="pill inline-block px-4 py-1.5 text-[11px]">Start my day</span>
+            <div className="headline mt-2 truncate text-[30px] leading-none text-[#F6F3FC]">{start.p.address}</div>
+            <div className="mt-0.5 text-[12px] text-ash">{start.why}</div>
+            <div className="mt-2 flex flex-wrap gap-3 font-mono text-[11px]">
+              <span><span className="text-muted">VALUE </span><span className="text-bone">{kmoney(start.value.current)}</span></span>
+              <span><span className="text-muted">EQUITY </span><span className="text-gold">{kmoney(start.value.equity)}</span></span>
+              <span><span className="text-muted">ARV </span><span className="text-bone">{kmoney(start.value.arv)}</span></span>
+            </div>
+          </div>
+          <div className="w-[200px] max-w-full justify-self-center">
+            <Radar
+              size={190}
+              axes={[
+                { label: "Distress", value: start.engines.distress.score },
+                { label: "Motive", value: start.engines.motivation.score },
+                { label: "Equity", value: start.engines.equity.score },
+                { label: "Gap", value: start.engines.valueGap.score },
+                { label: "Develop", value: start.engines.development.score },
+                { label: "Market", value: start.engines.market.score },
+              ]}
+            />
+          </div>
         </button>
       )}
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mat-obsidian rounded-[6px] p-3">
+          <div className="mb-2 font-mono text-[9px] tracking-[0.25em] text-muted">LEADS BY MISSION</div>
+          <div className="flex items-center gap-3">
+            <Donut slices={missionSlices} size={112} center={String(intel.length)} unit="LEADS" />
+            <Legend items={missionSlices.map((x) => ({ label: x.label, value: String(x.value), color: x.color }))} />
+          </div>
+        </div>
+        <div className="mat-obsidian rounded-[6px] p-3">
+          <div className="mb-2 font-mono text-[9px] tracking-[0.25em] text-muted">PIPELINE</div>
+          <HBars rows={stageRows} unit="" color="#06B6D4" />
+        </div>
+        <div className="mat-obsidian rounded-[6px] p-3">
+          <div className="mb-2 font-mono text-[9px] tracking-[0.25em] text-muted">SCORE SPREAD</div>
+          <Histogram values={intel.map((i) => i.score)} highlight={start?.score ?? null} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         <section>
-          <div className="font-mono text-[9px] tracking-[0.25em] text-gold">FOLLOW-UPS DUE</div>
-          <ul className="mt-1">{brief.due.map((q) => <Row key={q.intel.p.id} i={q.intel} tag={`DUE ${day(q.state?.nextFollowUp)}`} />)}</ul>
-          {!brief.due.length && <p className="px-2 text-[11px] text-muted">Nothing due. Work the top of the queue.</p>}
-          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">TOP 10 UNTOUCHED</div>
-          <ul className="mt-1">{brief.top.map((q) => <Row key={q.intel.p.id} i={q.intel} tag={q.action.verb} />)}</ul>
+          <div className="mb-1.5 font-mono text-[9px] tracking-[0.25em] text-cyan">TOP 10 UNTOUCHED</div>
+          <ul className="grid gap-1">{brief.top.map((q) => <LeadCard key={q.intel.p.id} i={q.intel} tag={q.action.verb} onOpen={onOpen} />)}</ul>
         </section>
         <section>
-          <div className="font-mono text-[9px] tracking-[0.25em] text-status-red">ON THE {brief.saleDate.slice(5).replace("-", "/")} FORECLOSURE SALE</div>
-          <ul className="mt-1">{brief.onTheSale.map((i) => <Row key={i.p.id} i={i} tag="SALE" />)}</ul>
-          {!brief.onTheSale.length && <p className="px-2 text-[11px] text-muted">No notices on file for this sale. Load the legal-organ list with --foreclosure.</p>}
-          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">⚡ NEW SIGNALS THIS WEEK</div>
-          <ul className="mt-1">{brief.newSignals.slice(0, 10).map((i) => <Row key={i.p.id} i={i} tag={i.primarySignal} />)}</ul>
-          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">PROBATE · LAST 90 DAYS</div>
-          <ul className="mt-1">{brief.probate.map((i) => <Row key={i.p.id} i={i} tag="LETTER" />)}</ul>
-          {!brief.probate.length && <p className="px-2 text-[11px] text-muted">None on file.</p>}
+          <div className="mb-1.5 font-mono text-[9px] tracking-[0.25em] text-status-red">ON THE {brief.saleDate.slice(5).replace("-", "/")} FORECLOSURE SALE</div>
+          <ul className="grid gap-1">{brief.onTheSale.map((i) => <LeadCard key={i.p.id} i={i} tag="SALE" tone="#EF4444" onOpen={onOpen} />)}</ul>
+          {!brief.onTheSale.length && <p className="text-[11px] text-muted">No notices on file for this sale.</p>}
+          <div className="mb-1.5 mt-4 font-mono text-[9px] tracking-[0.25em] text-status-green">⚡ NEW SIGNALS THIS WEEK</div>
+          <ul className="grid gap-1">{brief.newSignals.slice(0, 10).map((i) => <LeadCard key={i.p.id} i={i} tag={i.primarySignal} tone="#10B981" onOpen={onOpen} />)}</ul>
+          <div className="mb-1.5 mt-4 font-mono text-[9px] tracking-[0.25em] text-[#A78BFA]">PROBATE · LAST 90 DAYS</div>
+          <ul className="grid gap-1">{brief.probate.map((i) => <LeadCard key={i.p.id} i={i} tag="LETTER" tone="#A78BFA" onOpen={onOpen} />)}</ul>
+          {!brief.probate.length && <p className="text-[11px] text-muted">None on file.</p>}
         </section>
       </div>
     </div>

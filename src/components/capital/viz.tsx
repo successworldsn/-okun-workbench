@@ -64,7 +64,7 @@ export function ScoreRing({ value, size = 56, stroke = 5, label, sub }: { value:
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label ?? "Score"} ${value} of 100`} className="shrink-0">
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1E293B" strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={col} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${(c * Math.max(0, Math.min(100, value))) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ filter: `drop-shadow(0 0 4px ${col}80)` }} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={col} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${(c * Math.max(0, Math.min(100, value))) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       <text x="50%" y={sub ? "47%" : "50%"} textAnchor="middle" dominantBaseline="central" fill="#F8FAFC" fontFamily="var(--font-data)" fontWeight={700} fontSize={size * 0.3}>
         {value}
       </text>
@@ -88,14 +88,14 @@ export function Radar({ axes, size = 220 }: { axes: { label: string; value: numb
   };
   const poly = axes.map((x, i) => pt(i, Math.max(3, x.value)).join(",")).join(" ");
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="h-auto w-full max-w-[240px]" role="img" aria-label={axes.map((a) => `${a.label} ${a.value}`).join(", ")}>
+    <svg viewBox={`-28 0 ${size + 56} ${size}`} className="h-auto w-full max-w-[260px]" role="img" aria-label={axes.map((a) => `${a.label} ${a.value}`).join(", ")}>
       {[25, 50, 75, 100].map((g) => (
         <polygon key={g} points={axes.map((_, i) => pt(i, g).join(",")).join(" ")} fill={g === 100 ? "#06B6D40A" : "none"} stroke="#1E293B" strokeWidth={1} />
       ))}
       {axes.map((_, i) => (
         <line key={i} x1={cx} y1={cy} x2={pt(i, 100)[0]} y2={pt(i, 100)[1]} stroke="#1E293B" strokeWidth={1} />
       ))}
-      <polygon points={poly} fill="#C9A84C33" stroke="#C9A84C" strokeWidth={1.5} strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 6px #C9A84C66)" }} />
+      <polygon points={poly} fill="#C9A84C33" stroke="#C9A84C" strokeWidth={1.5} strokeLinejoin="round" />
       {axes.map((x, i) => {
         const [px, py] = pt(i, Math.max(3, x.value));
         const [lx, ly] = pt(i, 116);
@@ -237,7 +237,7 @@ export function ConstellationGraph({ site, slots }: { site: string; slots: { rol
           </g>
         );
       })}
-      <circle cx={cx} cy={cy} r={20} fill="#C9A84C1F" stroke="#C9A84C" strokeWidth={1.5} style={{ filter: "drop-shadow(0 0 8px #C9A84C88)" }} />
+      <circle cx={cx} cy={cy} r={20} fill="#C9A84C1F" stroke="#C9A84C" strokeWidth={1.5} />
       <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#C9A84C" fontSize={8} fontFamily="var(--font-data)" letterSpacing="1">
         SITE
       </text>
@@ -263,7 +263,6 @@ export function SatFrame({ site, className = "", children, compact }: { site: Si
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_45%,rgba(2,4,10,.75))]" />
       {!compact && (
         <>
-          <div className="ge-scan pointer-events-none absolute inset-x-0 h-px bg-cyan/50 shadow-[0_0_12px_#06B6D4]" />
           <Corner c="left-2 top-2 border-l-2 border-t-2" />
           <Corner c="right-2 top-2 border-r-2 border-t-2" />
           <Corner c="bottom-2 left-2 border-b-2 border-l-2" />
@@ -296,11 +295,8 @@ function NoImagery() {
       {[14, 28, 42].map((r) => (
         <circle key={r} cx="80" cy="50" r={r} fill="none" stroke="#06B6D4" strokeOpacity=".22" strokeWidth=".5" />
       ))}
-      <g className="ge-sweep" style={{ transformOrigin: "80px 50px" }}>
-        <path d="M80 50 L80 8 A42 42 0 0 1 116 29 Z" fill="#06B6D4" fillOpacity=".14" />
-      </g>
       <text x="80" y="93" textAnchor="middle" fill="#64748B" fontSize="4.5" fontFamily="monospace" letterSpacing=".6">
-        NO PHOTO YET · REFRESHES WITH THE WEEKLY FEED
+        NO PHOTO YET · ADDED WITH THE WEEKLY FEED
       </text>
     </svg>
   );
