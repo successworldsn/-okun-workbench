@@ -4,7 +4,7 @@
  * real Deal Desk, engines and EXAMPLE data bundled in, Tailwind compiled, and
  * Atlanta terrain tiles embedded (no tile server needed).
  *
- *   node tools/godseye-preview/build.mjs [--out dist/godseye-preview.html] [--data data/atlanta-intel.json]
+ *   node tools/godseye-preview/build.mjs [--app realestate|capital] [--out dist/…html] [--data data/atlanta-intel.json]
  *
  * With --data the page runs on a real feed output instead of the EXAMPLE set:
  * the top 1,500 leads by score plus up to 4,000 recent sales as the comp pool.
@@ -17,7 +17,10 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const args = process.argv.slice(2);
-const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(root, "dist", "godseye-preview.html");
+const app = args.includes("--app") ? args[args.indexOf("--app") + 1] : "realestate";
+const APPS = { realestate: { entry: "entry.tsx", out: "godseye-preview.html", title: "God's Eye Deal Desk" }, capital: { entry: "capital-entry.tsx", out: "capital-preview.html", title: "God's Eye Capital Desk" } };
+if (!APPS[app]) throw new Error(`--app must be one of ${Object.keys(APPS).join(", ")}`);
+const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(root, "dist", APPS[app].out);
 const dataPath = args.includes("--data") ? args[args.indexOf("--data") + 1] : null;
 const MAX_LEADS = 1500, MAX_POOL = 4000;
 const cache = join(root, "data", "terrain-cache");
@@ -78,7 +81,7 @@ async function main() {
   execFileSync(
     "npx",
     [
-      "--yes", "esbuild@0.24.0", join(here, "entry.tsx"),
+      "--yes", "esbuild@0.24.0", join(here, APPS[app].entry),
       "--bundle", "--minify", "--format=iife", "--target=es2020", "--jsx=automatic",
       `--outfile=${join(tmp, "app.js")}`,
       `--alias:@/app/realestate/actions=${join(here, "shims", "actions.ts")}`,
@@ -96,7 +99,7 @@ async function main() {
   const css = await readFile(join(tmp, "app.css"), "utf8");
   const mlcss = await readFile(join(root, "node_modules", "maplibre-gl", "dist", "maplibre-gl.css"), "utf8");
   const js = (await readFile(join(tmp, "app.js"), "utf8")).replace(/<\/script/gi, "<\\/script");
-  const html = `<title>God's Eye Deal Desk</title>
+  const html = `<title>${APPS[app].title}</title>
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">

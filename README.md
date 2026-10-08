@@ -212,6 +212,47 @@ kept in that browser's localStorage.
 basemap (OpenStreetMap data), AWS Terrain Tiles. MIT covers our code, not these
 datasets: keep each provider's attribution and terms.
 
+## God's Eye — AI Infrastructure Intelligence (Capital Desk)
+
+`/capital/command` puts the same engine on the capital flows behind AI:
+power → data centers → land → fiber → water → capital. **Find the money
+before it moves:** signals (data-center announcements, utility large-load
+filings, transmission and substation projects, plant retirements, PPAs,
+funding rounds, moratoriums) → sites scored on power, fiber, land, zoning,
+water, nearby demand and matching capital, minus risk → a **constellation**
+(landowner, utility, developer, capital, end user) with its gaps → a deal.
+
+- **Engine** (`lib/ci-intel.ts`): deliverable MW (reported > on-site generation >
+  estimate, never presented as a utility commitment), evidence badges
+  (VERIFIED government record · REPORTED filing/press/party · INFERRED our
+  estimate · STALE), confidence, star ratings, theses (powered-land sale,
+  stranded-power conversion, campus, land bank, no-go), capital-mandate
+  matching (asset type, MW range, region, recency) and a valuation screen.
+- **Deal brain** (`lib/ci-deal.ts`): deal records; a negotiation engine inside
+  *your box* (anchor, target, walk-away, priorities, non-negotiables, auto-step
+  limit) that recommends counter / accept / hold / walk with an acceptance
+  estimate and expected-value gain; **memory** of what each party said, which
+  the negotiation reads (a counter above a stated budget is flagged);
+  **CEO alerts** ranked by money at stake with SEND / EDIT / TAKE OVER; and a
+  ten-agent **deal team** (Scout, Analyst, Strategist, Due diligence,
+  Valuation, Dealmaker, Relationship, Compliance guard, Deal desk, Commander).
+- **Autonomy boundary**: 🟢 GREEN runs underneath (research, drafts,
+  follow-ups, scheduling, non-binding proposals, small counters on your side
+  of target) · 🟡 YELLOW is prepared and waits (counters past your auto-step
+  or target, introductions) · 🔴 RED is yours alone (accept, sign, commit
+  money, transfer ownership, past walk-away) — and the **compliance guard**
+  makes investor solicitation and sale-contingent fees RED until a licensed
+  partner is on the deal, and rejects drafts that claim authority you lack.
+- **The screen** opens on 🔥 MONEY · ⚡ ACTION · 👑 CONTROL, then the layer
+  bars, CEO alerts, hot opportunities with ★ ratings and the Georgia map.
+
+v1 runs on fictional EXAMPLE data and keeps deals, offers, the action queue,
+memory and the playbook in the browser. Nothing is sent from the desk: GREEN
+means cleared to send. Next: wire EIA-860, HIFLD substations/transmission,
+GA PSC filings, EDGAR Form D and news (SOURCES view), then Supabase storage
+and an email connector so GREEN actions can actually go out under the same
+rules. Preview build: `node tools/godseye-preview/build.mjs --app capital`.
+
 ## Setup
 
 Requires Node ≥ 18.

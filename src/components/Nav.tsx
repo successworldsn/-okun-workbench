@@ -19,6 +19,7 @@ const links = [
   { href: "/catalog-checklist", label: "Catalog" },
   { href: "/greenadvantage/command#intelligence", label: "GA Intel" },
   { href: "/realestate/command", label: "God's Eye" },
+  { href: "/capital/command", label: "Capital Desk" },
 ];
 
 function HexMark() {

@@ -173,8 +173,13 @@ export function GodsEyeMap({
   basemap,
   terrain,
   comps = [],
+  home = { center: ATL, zoom: 10.6, pitch: 50 },
+  selectZoom = 15.4,
 }: {
   comps?: CompPoint[];
+  /** Where the orbit → ground entrance lands, and how close a selection flies. */
+  home?: { center: [number, number]; zoom: number; pitch: number };
+  selectZoom?: number;
   points: MapPoint[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -210,7 +215,7 @@ export function GodsEyeMap({
     });
     map.once("load", () => {
       // Orbit → Georgia → Atlanta: the cinematic entrance.
-      map.flyTo({ center: ATL, zoom: 10.6, pitch: 50, bearing: -18, duration: 4200, essential: true });
+      map.flyTo({ center: home.center, zoom: home.zoom, pitch: home.pitch, bearing: -18, duration: 4200, essential: true });
     });
     map.on("click", "props-dot", (e) => {
       const id = e.features?.[0]?.properties?.id;
@@ -263,7 +268,7 @@ export function GodsEyeMap({
       if (selectedId) map.setFeatureState({ source: "props", id: selectedId }, { selected: true });
     }
     const p = pointsRef.current.find((x) => x.id === selectedId);
-    if (p) map.flyTo({ center: [p.lng, p.lat], zoom: 15.4, pitch: 58, bearing: map.getBearing() - 25, duration: 2600, essential: true });
+    if (p) map.flyTo({ center: [p.lng, p.lat], zoom: selectZoom, pitch: 58, bearing: map.getBearing() - 25, duration: 2600, essential: true });
   }, [selectedId]);
 
   return <div ref={el} className="absolute inset-0" />;
