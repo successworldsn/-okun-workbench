@@ -246,12 +246,29 @@ water, nearby demand and matching capital, minus risk → a **constellation**
 - **The screen** opens on 🔥 MONEY · ⚡ ACTION · 👑 CONTROL, then the layer
   bars, CEO alerts, hot opportunities with ★ ratings and the Georgia map.
 
-v1 runs on fictional EXAMPLE data and keeps deals, offers, the action queue,
-memory and the playbook in the browser. Nothing is sent from the desk: GREEN
-means cleared to send. Next: wire EIA-860, HIFLD substations/transmission,
-GA PSC filings, EDGAR Form D and news (SOURCES view), then Supabase storage
-and an email connector so GREEN actions can actually go out under the same
-rules. Preview build: `node tools/godseye-preview/build.mjs --app capital`.
+**Live data.** `.github/workflows/ga-infra-feed.yml` pulls Georgia's power
+plants (EIA-860 layer), substations ≥115 kV and transmission ≥230 kV (HIFLD
+layers) on GitHub's runners every Monday, scores each plant ≥50 MW and each
+substation ≥230 kV as a power node (distance to the nearest substation and
+≥230 kV line; MW for substations is a voltage-class estimate, labeled
+INFERRED) and commits `data/public/ga-infra.json`. It is public
+infrastructure data with no people in it. `/capital/command` reads it
+(`CI_INFRA_URL` → the deployed file → the copy on GitHub `main`) and shows
+**LIVE**; without it the desk falls back to fictional EXAMPLE data, labeled.
+In live mode you add the funds, buyers and signals you know (CAPITAL and
+SIGNALS views) and every site re-scores in the browser. Deals, offers, the
+action queue, memory and the playbook stay in the browser; nothing is sent
+from the desk: GREEN means cleared to send. Next: GA PSC filings, EDGAR
+Form D and news as automatic signals, Supabase storage, and an email
+connector so GREEN actions can go out under the same rules. Preview build:
+`node tools/godseye-preview/build.mjs --app capital [--data data/public/ga-infra.json]`.
+
+**Going live checklist (one-time, yours):** add repo secrets
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (and optionally a free
+`CENSUS_API_KEY`) so the daily Atlanta feed lands in the private
+`godseye-private` bucket; run `schema.sql` in Supabase; merge to the default
+branch (scheduled workflows only run from there) and deploy, with the same
+two Supabase values in the host's environment.
 
 ## Setup
 

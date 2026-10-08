@@ -58,6 +58,7 @@ const bin = (n) => join(root, "node_modules", ".bin", n);
 /** Real feed output → the slice the page carries (leads + comp pool), analyzed with the same engine. */
 async function realData() {
   if (!dataPath) return null;
+  if (app === "capital") return JSON.parse(await readFile(dataPath, "utf8")); // public infra feed, carried whole
   const { analyzeAll, isUsableSale } = await import("../../src/lib/re-intel.ts");
   const j = JSON.parse(await readFile(dataPath, "utf8"));
   const now = new Date();

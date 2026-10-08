@@ -38,4 +38,8 @@ jobs:
           git add -f data/public/ga-infra.json
           if git diff --cached --quiet; then echo "No change."; exit 0; fi
           git commit -m "GA infrastructure feed: $(date -u +%Y-%m-%d)"
-          git push
+          for i in 1 2 3 4; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
