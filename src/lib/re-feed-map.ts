@@ -518,3 +518,67 @@ export function assignTransit(props: PropertyRecord[], stations: Station[]) {
     p.transitName = best!.name;
   }
 }
+
+// ─── Rents: HUD Small Area FMR (by ZIP + bedrooms), Census ACS ───────────────
+
+/** HUD SAFMR sheet saved as CSV → ZIP → [0BR … 4BR]. Column names vary by year ("SAFMR 2BR", "safmr_2br" …). */
+export function mapSafmr(rows: Row[]): Map<string, (number | null)[]> {
+  const out = new Map<string, (number | null)[]>();
+  for (const r of rows) {
+    const zip = str(pick(r, ["ZIP Code", "ZIP", "ZCTA", "zip_code", "ZIPCODE"]))?.padStart(5, "0").slice(0, 5);
+    if (!zip) continue;
+    out.set(zip, [0, 1, 2, 3, 4].map((b) => num(pick(r, [`SAFMR ${b}BR`, `SAFMR_${b}BR`, `${b}BR`, `${b} BR`, `FMR_${b}`]))));
+  }
+  return out;
+}
+
+export function attachSafmr(props: PropertyRecord[], safmr: Map<string, (number | null)[]>, asOf: string, label = "HUD SAFMR") {
+  for (const p of props) {
+    const row = p.zip ? safmr.get(p.zip) : undefined;
+    if (!row) continue;
+    const known = p.beds != null;
+    const beds = Math.max(0, Math.min(4, Math.round(p.beds ?? ((p.sqft ?? 0) > 1200 ? 3 : 2))));
+    const v = row[beds];
+    if (v == null) continue;
+    p.rentEstimates = [...(p.rentEstimates ?? []).filter((x) => x.source !== "hud_safmr"), { value: v, source: "hud_safmr", asOf, basis: `${label} ${beds}BR, ZIP ${p.zip}${known ? "" : " (bedrooms not on record: assumed from size)"}` }];
+  }
+}
+
+export interface AcsZip {
+  rent: number | null;
+  pop: number | null;
+  income: number | null;
+}
+
+/** Census API JSON ([[header…], [row…]]) → ZCTA → figures. Census marks missing values with large negatives. */
+export function parseAcs(json: unknown): Map<string, AcsZip> {
+  const rows = json as string[][];
+  const out = new Map<string, AcsZip>();
+  if (!Array.isArray(rows) || rows.length < 2) return out;
+  const h = rows[0];
+  const ix = (k: string) => h.indexOf(k);
+  const val = (r: string[], k: string) => {
+    const n = ix(k) >= 0 ? Number(r[ix(k)]) : NaN;
+    return isFinite(n) && n >= 0 ? n : null;
+  };
+  const zi = h.findIndex((x) => /zip code tabulation area/i.test(x));
+  for (const r of rows.slice(1)) out.set(r[zi], { rent: val(r, "B25064_001E"), pop: val(r, "B01003_001E"), income: val(r, "B19013_001E") });
+  return out;
+}
+
+export function attachAcs(props: PropertyRecord[], market: Record<string, MarketContext>, latest: Map<string, AcsZip>, earlier: Map<string, AcsZip>, year: number, asOf: string) {
+  for (const p of props) {
+    const a = p.zip ? latest.get(p.zip) : undefined;
+    if (a?.rent != null)
+      p.rentEstimates = [...(p.rentEstimates ?? []).filter((x) => x.source !== "census_acs"), { value: a.rent, source: "census_acs", asOf, basis: `ACS ${year} 5-yr median gross rent, ZIP ${p.zip} (all unit types)` }];
+  }
+  for (const [zip, m] of Object.entries(market)) {
+    const a = latest.get(zip), b = earlier.get(zip);
+    if (!a) continue;
+    m.medianIncome = a.income;
+    m.medianRent = a.rent;
+    if (a.pop != null && b?.pop) m.popGrowthPct = Math.round((a.pop / b.pop - 1) * 1000) / 10;
+    if (a.income != null && b?.income) m.incomeGrowthPct = Math.round((a.income / b.income - 1) * 1000) / 10;
+    if (a.rent != null && b?.rent) m.rentGrowthPct = Math.round(((a.rent / b.rent) ** (1 / 5) - 1) * 1000) / 10; // per year
+  }
+}

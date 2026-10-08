@@ -8,6 +8,7 @@
  */
 import type { Intel, Mission } from "./re-intel.ts";
 
+
 export const STAGES = [
   "DISCOVERED",
   "RESEARCHING",
@@ -333,4 +334,54 @@ export function applyCommand(all: Intel[], f: CommandFilter, states: Record<stri
   });
   out = out.sort((a, b) => b.score - a.score);
   return f.limit ? out.slice(0, f.limit) : out;
+}
+
+// ─── Today briefing (the 8:00 command-center view) ──────────────────────────
+
+/**
+ * Georgia non-judicial foreclosure sales happen on the first Tuesday of the
+ * month (the Wednesday after, when that Tuesday is New Year's Day or July 4th).
+ * Returns the next sale date on or after `now` (local calendar date).
+ */
+export function nextForeclosureSale(now: Date): Date {
+  const pick = (y: number, m: number) => {
+    const d = new Date(Date.UTC(y, m, 1));
+    while (d.getUTCDay() !== 2) d.setUTCDate(d.getUTCDate() + 1);
+    if ((m === 0 && d.getUTCDate() === 1) || (m === 6 && d.getUTCDate() === 4)) d.setUTCDate(d.getUTCDate() + 1);
+    return d;
+  };
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const thisMonth = pick(now.getUTCFullYear(), now.getUTCMonth());
+  return thisMonth.getTime() >= today ? thisMonth : pick(now.getUTCFullYear() + (now.getUTCMonth() === 11 ? 1 : 0), (now.getUTCMonth() + 1) % 12);
+}
+
+export interface TodayBrief {
+  date: string;
+  due: QueueItem[];
+  newSignals: Intel[];
+  saleDate: string;
+  daysToSale: number;
+  onTheSale: Intel[];
+  probate: Intel[];
+  top: QueueItem[];
+  touchedYesterday: number;
+}
+
+export function todayBrief(all: Intel[], states: Record<string, DeskState>, activity: Activity[], now: Date): TodayBrief {
+  const q = buildQueue(all, states, now, "all", 500);
+  const sale = nextForeclosureSale(now);
+  const saleDay = sale.toISOString().slice(0, 10);
+  const weekAgo = now.getTime() - 7 * DAY;
+  const dayAgo = now.getTime() - DAY;
+  return {
+    date: now.toISOString().slice(0, 10),
+    due: q.filter((x) => x.due),
+    newSignals: all.filter((i) => i.newestSignalAt && new Date(i.newestSignalAt).getTime() >= weekAgo && (states[i.p.id]?.stage ?? "DISCOVERED") === "DISCOVERED"),
+    saleDate: saleDay,
+    daysToSale: Math.round((sale.getTime() - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) / DAY),
+    onTheSale: all.filter((i) => i.p.foreclosure && i.p.foreclosure.saleDate.slice(0, 10) === saleDay),
+    probate: all.filter((i) => i.p.probate && now.getTime() - new Date(i.p.probate.filedAt).getTime() <= 90 * DAY),
+    top: q.filter((x) => !x.due).slice(0, 10),
+    touchedYesterday: activity.filter((a) => new Date(a.at).getTime() >= dayAgo).length,
+  };
 }

@@ -65,6 +65,55 @@ const SEEDS: Seed[] = [
 ];
 
 export function demoProperties(now: Date): PropertyRecord[] {
+  return [...demoLeads(now), ...demoComps(now)];
+}
+
+/**
+ * Fictional sold houses around each lead (pool-only, compOnly: true) so the
+ * comp engine has public-record-style sales to pick from: about half carry a
+ * renovation permit in the year before the sale and trade near the ZIP's
+ * renovated $/sq ft; the rest trade near the as-is median.
+ */
+function demoComps(now: Date): PropertyRecord[] {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const market = demoMarket(now);
+  const out: PropertyRecord[] = [];
+  SEEDS.forEach((s, i) => {
+    const m = market[s.zip];
+    if (!m) return;
+    for (let k = 0; k < 8; k++) {
+      const reno = k % 2 === 0;
+      const sqft = Math.round(s.sqft * (0.85 + rnd() * 0.3));
+      const ppsf = (reno ? m.renovatedPpsf! : m.medianPpsf! * 1.05) * (0.9 + rnd() * 0.2);
+      const daysAgo = Math.round(20 + rnd() * 320);
+      const saleDate = ago(now, daysAgo);
+      const ang = rnd() * Math.PI * 2, dist = 0.002 + rnd() * 0.009;
+      out.push({
+        id: `EXC${String(i).padStart(2, "0")}${k}`,
+        address: `${100 + Math.round(rnd() * 1800)} Comparable ${["St", "Ave", "Dr", "Pl", "Ct", "Way", "Ln", "Rd"][k]} ${s.street.split(" ").pop()}`,
+        city: s.zip === "30032" ? "Decatur" : "Atlanta",
+        zip: s.zip,
+        county: s.zip === "30032" ? "DeKalb" : "Fulton",
+        lat: s.lat + Math.sin(ang) * dist,
+        lng: s.lng + Math.cos(ang) * dist,
+        example: true,
+        compOnly: true,
+        sqft,
+        yearBuilt: s.yb + Math.round((rnd() - 0.5) * 20),
+        fairMarketValue: Math.round(sqft * m.medianPpsf!),
+        lastSaleDate: saleDate,
+        lastSalePrice: Math.round((sqft * ppsf) / 500) * 500,
+        transfers: [{ date: saleDate, price: Math.round((sqft * ppsf) / 500) * 500, deedType: "Warranty Deed" }],
+        permits: reno ? [{ id: `EX-BB-C${i}${k}`, category: "renovation", type: "Building · Residential alteration", status: "Finaled", issuedAt: ago(now, daysAgo + 60 + Math.round(rnd() * 200)) }] : [],
+        provenance: { lastSalePrice: { source: "deeds", asOf: ago(now, 3) }, lastSaleDate: { source: "deeds", asOf: ago(now, 3) } },
+      });
+    }
+  });
+  return out;
+}
+
+function demoLeads(now: Date): PropertyRecord[] {
   return SEEDS.map((s, i) => {
     const address = `${s.n} ${s.street}`;
     const saleDate = ago(now, Math.round(s.saleYearsAgo * 365.25));
@@ -101,7 +150,10 @@ export function demoProperties(now: Date): PropertyRecord[] {
       lastSalePrice: s.salePrice,
       permits: [],
       codeCases: [],
-      rentEstimate: { value: s.rent, source: "manual", asOf: ago(now, 30) },
+      rentEstimates: [
+        { value: Math.round((s.rent * 1.04) / 10) * 10, source: "hud_safmr", asOf: ago(now, 300), basis: `HUD SAFMR ${s.sqft > 1800 ? 4 : s.sqft > 1200 ? 3 : 2}BR, ZIP ${s.zip}` },
+        { value: Math.round((s.rent * 0.82) / 10) * 10, source: "census_acs", asOf: ago(now, 400), basis: `ACS median gross rent, ZIP ${s.zip} (all unit types)` },
+      ],
       provenance: {
         owner: { source: "coa_parcels", asOf: ago(now, 1) },
         ownerMailing: { source: "coa_parcels", asOf: ago(now, 1) },
@@ -119,7 +171,7 @@ export function demoProperties(now: Date): PropertyRecord[] {
 }
 
 const M = (key: string, medianPpsf: number, renovatedPpsf: number, s12: number, s24: number, rentGrowthPct: number, reno: number, nc: number): MarketContext =>
-  ({ key, medianPpsf, renovatedPpsf, salesLast12: s12, salesPrior12: s24, rentGrowthPct, renovationPermits12: reno, newConstructionPermits12: nc, demolitionPermits12: Math.round(nc / 3), asOf: null, source: "market", medianRent: null });
+  ({ key, medianPpsf, renovatedPpsf, salesLast12: s12, salesPrior12: s24, rentGrowthPct, renovationPermits12: reno, newConstructionPermits12: nc, demolitionPermits12: Math.round(nc / 3), asOf: null, source: "market", medianRent: null, popGrowthPct: Math.round(rentGrowthPct * 1.4 * 10) / 10, incomeGrowthPct: Math.round(rentGrowthPct * 4.5), medianIncome: Math.round(medianPpsf * 380) });
 
 export function demoMarket(now: Date): Record<string, MarketContext> {
   const list = [

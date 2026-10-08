@@ -8,7 +8,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { MISSIONS, SOURCES, STRATEGY_LABELS, badge, type Badge, type Evidence, type Intel, type MarketContext, type Mission } from "@/lib/re-intel";
+import { MISSIONS, SOURCES, STRATEGY_LABELS, badge, chooseRent, type Badge, type Evidence, type Intel, type MarketContext, type Mission } from "@/lib/re-intel";
 import {
   STAGES,
   ACTION_LABELS,
@@ -18,6 +18,7 @@ import {
   moneyStats,
   nextAction,
   parseCommand,
+  todayBrief,
   type Activity,
   type ActivityKind,
   type CommandFilter,
@@ -32,7 +33,7 @@ import type { Basemap, MapPoint } from "./GodsEyeMap";
 
 const GodsEyeMap = dynamic(() => import("./GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
-type View = "desk" | "pipeline" | "money" | "sources";
+type View = "today" | "desk" | "pipeline" | "money" | "sources";
 type Tab = "OWNER" | "PROPERTY" | "MONEY" | "ZONING" | "COMPS" | "CONTACT" | "ACTION";
 const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "ZONING", "COMPS", "CONTACT", "ACTION"];
 
@@ -113,7 +114,7 @@ export function DealDesk({
   const [activity, setActivity] = useState(initialActivity);
   const [mission, setMission] = useState<Mission | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<View>("desk");
+  const [view, setView] = useState<View>("today");
   const [tab, setTab] = useState<Tab>("ACTION");
   const [cmd, setCmd] = useState("");
   const [filter, setFilter] = useState<CommandFilter | null>(null);
@@ -138,10 +139,15 @@ export function DealDesk({
   const visibleIds = useMemo(() => new Set(visible.map((i) => i.p.id)), [visible]);
   const queue = useMemo(() => buildQueue(filter ? visible : intel, states, now, mission, 60), [intel, visible, filter, states, now, mission]);
   const stats = useMemo(() => moneyStats(intel, states), [intel, states]);
+  const brief = useMemo(() => todayBrief(intel, states, activity, now), [intel, states, activity, now]);
   const sel = selectedId ? byId.get(selectedId) ?? null : null;
   const selState = sel ? states[sel.p.id] : undefined;
   const selAction = sel ? nextAction(sel, selState, now) : null;
   const selActivity = sel ? activity.filter((a) => a.parcelId === sel.p.id) : [];
+  const compPoints = useMemo(
+    () => (sel?.comps ? [...sel.comps.renovated, ...sel.comps.asIs].map((c) => ({ id: c.id, lat: c.lat, lng: c.lng, renovated: c.renovated, label: `${c.address} · $${Math.round(c.price / 1000)}K · $${c.ppsf}/sf` })) : []),
+    [sel],
+  );
 
   const points: MapPoint[] = useMemo(
     () =>
@@ -223,9 +229,9 @@ export function DealDesk({
         QUEUE <span className="text-bone">{queue.length}</span>
       </span>
       <nav className="flex gap-1">
-        {(["desk", "pipeline", "money", "sources"] as View[]).map((v) => (
+        {(["today", "desk", "pipeline", "money", "sources"] as View[]).map((v) => (
           <button key={v} onClick={() => setView(v)} className={`rounded px-2 py-1 uppercase ${view === v ? "bg-cyan/15 text-cyan" : "hover:text-bone"}`}>
-            {v === "desk" ? "Desk" : v === "money" ? "Money" : v === "sources" ? "Data" : "Pipeline"}
+            {v === "today" ? "Today" : v === "desk" ? "Desk" : v === "money" ? "Money" : v === "sources" ? "Data" : "Pipeline"}
           </button>
         ))}
       </nav>
@@ -331,7 +337,14 @@ export function DealDesk({
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="order-2 flex max-h-[38vh] min-h-0 lg:order-1 lg:max-h-none">{rail}</div>
         <main className="relative order-1 h-[42vh] min-w-0 flex-1 lg:order-2 lg:h-auto">
-          <GodsEyeMap points={points} selectedId={selectedId} onSelect={select} basemap={basemap} terrain={terrain} />
+          <GodsEyeMap
+            points={points}
+            selectedId={selectedId}
+            onSelect={select}
+            basemap={basemap}
+            terrain={terrain}
+            comps={compPoints}
+          />
           <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(2,4,10,0.95)]" />
           <div className="absolute left-2 top-2 flex flex-wrap gap-1 font-mono text-[10px] tracking-wider">
             <button onClick={() => setBasemap(basemap === "satellite" ? "dark" : "satellite")} className="rounded border border-cyan/30 bg-[#03060D]/80 px-2 py-1 text-cyan">
@@ -356,6 +369,7 @@ export function DealDesk({
           )}
           {view !== "desk" && (
             <div className="absolute inset-0 overflow-y-auto bg-[#02040A]/92 p-4 backdrop-blur-sm">
+              {view === "today" && <TodayView brief={brief} onOpen={select} />}
               {view === "pipeline" && <Pipeline intel={intel} states={states} onOpen={select} />}
               {view === "money" && <MoneyView stats={stats} />}
               {view === "sources" && <SourcesView meta={meta} now={now} shown={intel.length} total={totalProperties} />}
@@ -571,13 +585,18 @@ function Dossier(props: {
               <div className="grid grid-cols-2 gap-2">
                 <Stat k="Estimated value" v={money(i.value.current)} />
                 <Stat k="Potential equity" v={money(i.value.equity)} />
-                <Stat k="Estimated rent" v={p.rentEstimate ? `${money(p.rentEstimate.value)}/mo` : "—"} />
+                <Stat k="Estimated rent" v={chooseRent(p) ? `${money(chooseRent(p)!.value)}/mo` : "—"} />
                 <Stat k="Potential ARV" v={money(i.value.arv)} />
               </div>
               <ul className="mt-2 space-y-1 text-[11px] text-ash">
                 <li>Value: {i.value.currentBasis}</li>
                 <li>ARV: {i.value.arvBasis}</li>
                 <li>Debt: {i.value.debtBasis}</li>
+                {(p.rentEstimates ?? []).map((r) => (
+                  <li key={r.source}>
+                    Rent: {money(r.value)}/mo · {r.basis} <span className="text-muted">({SOURCES[r.source].label})</span>
+                  </li>
+                ))}
               </ul>
               <div className="mt-3 font-mono text-[9px] tracking-[0.25em] text-muted">STRATEGIES</div>
               <table className="mt-1 w-full text-[11px]">
@@ -607,6 +626,42 @@ function Dossier(props: {
           )}
           {tab === "COMPS" && (
             <>
+              {i.comps ? (
+                <div className="mb-3">
+                  <div className="font-mono text-[9px] tracking-[0.25em] text-muted">PUBLIC-RECORD COMPS · WITHIN {i.comps.radiusMi} MI · ON THE MAP</div>
+                  {(["renovated", "asIs"] as const).map((k) => (
+                    <div key={k} className="mt-2">
+                      <div className={`font-mono text-[10px] tracking-wider ${k === "renovated" ? "text-gold" : "text-ash"}`}>
+                        {k === "renovated" ? "◆ RENOVATED" : "◇ AS-IS"} · {i.comps![k].length} sale{i.comps![k].length === 1 ? "" : "s"}
+                        {k === "renovated" && i.comps!.arv != null ? ` → ARV ${money(i.comps!.arv)}` : ""}
+                        {k === "asIs" && i.comps!.asIsValue != null ? ` → as-is ${money(i.comps!.asIsValue)}` : ""}
+                        {i.comps![k].length < 3 ? " · fewer than 3: not used" : ""}
+                      </div>
+                      <table className="mt-1 w-full text-[11px]">
+                        <tbody>
+                          {i.comps![k].map((c) => (
+                            <tr key={c.id} className="border-b border-elevated/60 align-top">
+                              <td className="py-1 pr-2 text-bone">
+                                {c.address}
+                                <div className="text-[10px] text-muted">{c.why}</div>
+                              </td>
+                              <td className="py-1 pr-2 text-right font-mono text-ash">{c.miles} mi</td>
+                              <td className="py-1 pr-2 text-right font-mono text-ash">{day(c.saleDate)}</td>
+                              <td className="py-1 text-right font-mono text-bone">
+                                {kmoney(c.price)}
+                                <div className="text-[10px] text-muted">${c.ppsf}/sf</div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                  <p className="mt-2 text-[10px] text-muted">Arm&apos;s-length sales only (quitclaim, estate and foreclosure deeds dropped), ±30% of this house&apos;s size, last 12 months (18 at 1.5 mi). Renovated = a renovation permit in the 2 years before the sale. Walk the comps before you trust the ARV.</p>
+                </div>
+              ) : (
+                <p className="mb-3 text-[11px] text-muted">No recorded sales close enough to use as comps. Sweep this ZIP in the feed (--zip) to pull its sales.</p>
+              )}
               {props.market ? (
                 <Rows
                   rows={[
@@ -778,6 +833,68 @@ function ContactLog({ acts }: { acts: Activity[] }) {
 }
 
 // ─── Pipeline / Money / Sources ───────────────────────────────────────────────
+
+function TodayView({ brief, onOpen }: { brief: ReturnType<typeof todayBrief>; onOpen: (id: string) => void }) {
+  const start = brief.due[0]?.intel ?? brief.top[0]?.intel;
+  const when = new Date(`${brief.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+  const tiles: [string, string, string][] = [
+    ["Follow-ups due", String(brief.due.length), brief.due.length ? "do these first" : "none due"],
+    ["New signals · 7 days", String(brief.newSignals.length), "untouched properties"],
+    ["Next foreclosure sale", brief.saleDate.slice(5).replace("-", "/"), `${brief.daysToSale} days · first Tuesday`],
+    ["Probate · 90 days", String(brief.probate.length), "estates with real property"],
+  ];
+  const Row = ({ i, tag }: { i: Intel; tag: string }) => (
+    <li>
+      <button onClick={() => onOpen(i.p.id)} className="flex w-full items-baseline gap-3 rounded px-2 py-1.5 text-left hover:bg-elevated/70">
+        <span className="w-8 font-mono text-[13px] font-bold text-bone">{i.score}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-bone">{i.p.address}</span>
+        <span className="font-mono text-[10px] tracking-wider text-cyan">{tag}</span>
+      </button>
+    </li>
+  );
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div className="font-mono text-[10px] tracking-[0.3em] text-muted">COMMAND CENTER · {when.toUpperCase()}</div>
+      <h2 className="mt-1 font-display text-2xl font-bold">
+        {brief.due.length + brief.top.length} on the desk today
+        {brief.touchedYesterday ? <span className="ml-2 text-sm font-normal text-ash">· {brief.touchedYesterday} touches in the last 24 h</span> : null}
+      </h2>
+      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+        {tiles.map(([k, v, sub]) => (
+          <div key={k} className="rounded border border-cyan/15 bg-[#050912] p-3">
+            <div className="font-mono text-[9px] tracking-[0.2em] text-muted">{k.toUpperCase()}</div>
+            <div className="mt-1 font-mono text-2xl font-bold text-bone">{v}</div>
+            <div className="text-[10px] text-ash">{sub}</div>
+          </div>
+        ))}
+      </div>
+      {start && (
+        <button onClick={() => onOpen(start.p.id)} className="mt-4 w-full rounded-control bg-gold/20 py-3 font-mono text-sm font-bold tracking-[0.25em] text-gold hover:bg-gold/30">
+          START MY DAY ▸ {start.p.address}
+        </button>
+      )}
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        <section>
+          <div className="font-mono text-[9px] tracking-[0.25em] text-gold">FOLLOW-UPS DUE</div>
+          <ul className="mt-1">{brief.due.map((q) => <Row key={q.intel.p.id} i={q.intel} tag={`DUE ${day(q.state?.nextFollowUp)}`} />)}</ul>
+          {!brief.due.length && <p className="px-2 text-[11px] text-muted">Nothing due. Work the top of the queue.</p>}
+          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">TOP 10 UNTOUCHED</div>
+          <ul className="mt-1">{brief.top.map((q) => <Row key={q.intel.p.id} i={q.intel} tag={q.action.verb} />)}</ul>
+        </section>
+        <section>
+          <div className="font-mono text-[9px] tracking-[0.25em] text-status-red">ON THE {brief.saleDate.slice(5).replace("-", "/")} FORECLOSURE SALE</div>
+          <ul className="mt-1">{brief.onTheSale.map((i) => <Row key={i.p.id} i={i} tag="SALE" />)}</ul>
+          {!brief.onTheSale.length && <p className="px-2 text-[11px] text-muted">No notices on file for this sale. Load the legal-organ list with --foreclosure.</p>}
+          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">⚡ NEW SIGNALS THIS WEEK</div>
+          <ul className="mt-1">{brief.newSignals.slice(0, 10).map((i) => <Row key={i.p.id} i={i} tag={i.primarySignal} />)}</ul>
+          <div className="mt-4 font-mono text-[9px] tracking-[0.25em] text-cyan">PROBATE · LAST 90 DAYS</div>
+          <ul className="mt-1">{brief.probate.map((i) => <Row key={i.p.id} i={i} tag="LETTER" />)}</ul>
+          {!brief.probate.length && <p className="px-2 text-[11px] text-muted">None on file.</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
 
 function Pipeline({ intel, states, onOpen }: { intel: Intel[]; states: Record<string, DeskState>; onOpen: (id: string) => void }) {
   const cols = STAGES.filter((s) => s !== "DEAD");

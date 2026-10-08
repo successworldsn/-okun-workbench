@@ -98,6 +98,27 @@ More free sources, each joined to the parcel and badged:
 | MARTA rail stations | MARTA GTFS (`google_transit.zip` or `--gtfs stops.txt`) | Distance to the nearest station (development engine) |
 | DeKalb, Cobb, Gwinnett, Clayton | Each county's parcel layer in `sources.json → counties`, swept with `--county dekalb:30032,30034` | Same engines; the Atlanta zoning screen is skipped outside the city |
 
+**Comps from public records** (`findComps` in `lib/re-intel.ts`): the nearest
+arm's-length sales (quitclaim, estate and foreclosure deeds dropped; price
+within 0.3–4× the county value) of similar size (±30%) in the last 12 months,
+widening 0.5 → 1 → 1.5 mi (18 months at 1.5). A sale counts as *renovated* when
+a renovation / new-construction permit was issued in the 2 years before it.
+Three or more renovated sales set ARV, three or more as-is sales set the as-is
+value; otherwise the engine falls back to the ZIP average and says so. Each
+comp's address, price, $/sq ft, distance and permit become evidence on the
+dossier and markers on the map. Sweep a ZIP (`--zip`) so its sales are in the pool.
+
+**Rents and growth**: `--safmr hud-safmr.csv` (HUD Small Area FMR, the ZIP sheet
+saved as CSV) gives rent by bedroom count; Census ACS 5-year (pulled
+automatically, `CENSUS_API_KEY` optional) adds a ZIP median rent as a
+cross-check (the "Rent" conclusion is corroborated only when they agree within
+35%) plus 5-year population, income and rent growth for the market engine.
+
+**Today** (the desk's opening view): follow-ups due, new signals this week, the
+next Georgia foreclosure sale (first Tuesday; Wednesday when that is Jan 1 or
+Jul 4) with the properties noticed for it, probate in the last 90 days, the top
+10 untouched, and START MY DAY.
+
 Output: `data/atlanta-intel.json` (git-ignored: it holds owner names) and
 `data/deal-intel-import.csv`, which pastes straight into the Atlanta Deal
 Intelligence worksheet's importer for full underwriting. On Vercel, upload the

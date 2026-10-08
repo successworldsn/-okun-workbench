@@ -23,6 +23,18 @@ export interface MapPoint {
 
 export type Basemap = "satellite" | "dark";
 
+export interface CompPoint {
+  id: string;
+  lat: number;
+  lng: number;
+  renovated: boolean;
+  label: string;
+}
+
+function compGeo(comps: CompPoint[]): GeoJSON.FeatureCollection {
+  return { type: "FeatureCollection", features: comps.map((c) => ({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { renovated: c.renovated ? 1 : 0, label: c.label } })) };
+}
+
 const ATL: [number, number] = [-84.39, 33.75];
 
 /**
@@ -113,8 +125,20 @@ function toGeo(points: MapPoint[]): GeoJSON.FeatureCollection {
   };
 }
 
-function addLayers(map: MLMap, points: MapPoint[]) {
+function addLayers(map: MLMap, points: MapPoint[], comps: CompPoint[]) {
   if (map.getSource("props")) return;
+  map.addSource("comps", { type: "geojson", data: compGeo(comps) });
+  map.addLayer({
+    id: "comps-dot",
+    type: "circle",
+    source: "comps",
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 17, 7],
+      "circle-color": ["case", ["==", ["get", "renovated"], 1], "#C9A84C", "#0F172A"],
+      "circle-stroke-color": ["case", ["==", ["get", "renovated"], 1], "#FDE68A", "#94A3B8"],
+      "circle-stroke-width": 1.5,
+    },
+  });
   map.addSource("props", { type: "geojson", data: toGeo(points), promoteId: "id" });
   map.addLayer({
     id: "props-halo",
@@ -148,7 +172,9 @@ export function GodsEyeMap({
   onSelect,
   basemap,
   terrain,
+  comps = [],
 }: {
+  comps?: CompPoint[];
   points: MapPoint[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -158,6 +184,8 @@ export function GodsEyeMap({
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const pointsRef = useRef(points);
+  const compsRef = useRef(comps);
+  compsRef.current = comps;
   const selRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
@@ -177,7 +205,7 @@ export function GodsEyeMap({
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.on("style.load", () => {
-      addLayers(map, pointsRef.current);
+      addLayers(map, pointsRef.current, compsRef.current);
       if (selRef.current) map.setFeatureState({ source: "props", id: selRef.current }, { selected: true });
     });
     map.once("load", () => {
@@ -197,6 +225,11 @@ export function GodsEyeMap({
       popup.setLngLat(e.lngLat).setText(`${f.properties?.score} · ${f.properties?.label}`).addTo(map);
     });
     map.on("mouseleave", "props-dot", () => popup.remove());
+    map.on("mousemove", "comps-dot", (e) => {
+      const f = e.features?.[0];
+      if (f) popup.setLngLat(e.lngLat).setText(`${f.properties?.renovated ? "◆ renovated comp" : "◇ as-is comp"} · ${f.properties?.label}`).addTo(map);
+    });
+    map.on("mouseleave", "comps-dot", () => popup.remove());
     return () => map.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -216,6 +249,11 @@ export function GodsEyeMap({
   }, [points]);
 
   useEffect(() => {
+    const src = mapRef.current?.getSource("comps") as GeoJSONSource | undefined;
+    src?.setData(compGeo(comps));
+  }, [comps]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const prev = selRef.current;
@@ -225,7 +263,7 @@ export function GodsEyeMap({
       if (selectedId) map.setFeatureState({ source: "props", id: selectedId }, { selected: true });
     }
     const p = pointsRef.current.find((x) => x.id === selectedId);
-    if (p) map.flyTo({ center: [p.lng, p.lat], zoom: 17.2, pitch: 62, bearing: map.getBearing() - 25, duration: 2600, essential: true });
+    if (p) map.flyTo({ center: [p.lng, p.lat], zoom: 15.4, pitch: 58, bearing: map.getBearing() - 25, duration: 2600, essential: true });
   }, [selectedId]);
 
   return <div ref={el} className="absolute inset-0" />;

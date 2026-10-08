@@ -13,7 +13,13 @@
  *   node tools/atlanta-intel/atlanta-feed.mjs                      # default: 730 days of permits
  *   node tools/atlanta-intel/atlanta-feed.mjs --since 365 --zip 30310 --zip 30314 \
  *        --tax lists/tax.csv --foreclosure lists/notices.csv --probate lists/estates.csv \
- *        --deeds lists/deed-index.csv --atl311 lists/atl311.csv --county dekalb:30032,30034
+ *        --deeds lists/deed-index.csv --atl311 lists/atl311.csv --county dekalb:30032,30034 \
+ *        --safmr lists/hud-safmr.csv
+ *
+ * Rents: HUD Small Area FMR (the ZIP sheet from huduser.gov, saved as CSV) by
+ * bedroom count, cross-checked with Census ACS median rent. Census ACS also
+ * gives 5-year population / income / rent growth per ZIP (CENSUS_API_KEY
+ * optional; --acs-year, default 2024; --no-census to skip).
  *
  * Enrichment on every parcel pulled: FEMA flood zone (NFHL), Opportunity Zone
  * tract, distance to the nearest MARTA rail station (GTFS). Deeds + security
@@ -32,6 +38,7 @@ import { fileURLToPath } from "node:url";
 import {
   mapPermitRow, mapCodeRow, mapParcel, parcelKey, attachListRow, buildMarket, toDealIntelCsvRow, unmappedFields, pick, FIELDS,
   mapDeedRow, attachDeeds, map311Row, toPoly, assignFlood, assignOpportunityZones, parseGtfsStations, assignTransit,
+  mapSafmr, attachSafmr, parseAcs, attachAcs,
 } from "../../src/lib/re-feed-map.ts";
 import { analyzeAll, ownershipYears, rehabEstimate } from "../../src/lib/re-intel.ts";
 
@@ -56,6 +63,9 @@ function args() {
     gtfs: one("--gtfs"),
     counties: all("--county").map((c) => { const [name, zips = ""] = c.split(":"); return { name: name.toLowerCase(), zips: zips.split(",").filter(Boolean) }; }),
     skipEnrich: a.includes("--no-enrich"),
+    safmr: one("--safmr"),
+    acsYear: Number(one("--acs-year", "2024")),
+    noCensus: a.includes("--no-census"),
   };
 }
 
@@ -417,6 +427,32 @@ async function main() {
     await enrich("transit", L.marta_gtfs.label, opt.gtfs ?? L.marta_gtfs?.url, async () => { const st = await loadStations(opt.gtfs ?? L.marta_gtfs.url); assignTransit(props, st); return st.length; });
   }
   const market = buildMarket(props, now);
+
+  // 8. Rents + growth: HUD SAFMR (by bedrooms) and Census ACS (cross-check + 5-year trends)
+  if (opt.safmr) {
+    const rows = await readList(opt.safmr);
+    attachSafmr(props, mapSafmr(rows), pulledAt);
+    report.push({ id: "hud_safmr", label: "HUD Small Area Fair Market Rents", url: opt.safmr, pulledAt, records: rows.length });
+  }
+  if (!opt.noCensus) {
+    const zips = [...new Set(props.map((p) => p.zip).filter(Boolean))];
+    const acs = async (year) => {
+      const key = process.env.CENSUS_API_KEY ? `&key=${process.env.CENSUS_API_KEY}` : "";
+      const base = process.env.CENSUS_API_BASE || "https://api.census.gov";
+      const res = await fetch(`${base}/data/${year}/acs/acs5?get=B25064_001E,B01003_001E,B19013_001E&for=zip%20code%20tabulation%20area:${zips.join(",")}${key}`);
+      if (!res.ok) throw new Error(`Census ${year}: HTTP ${res.status}`);
+      return parseAcs(await res.json());
+    };
+    try {
+      let year = opt.acsYear, latest;
+      try { latest = await acs(year); } catch { year -= 1; latest = await acs(year); }
+      const earlier = await acs(year - 5).catch(() => new Map());
+      attachAcs(props, market, latest, earlier, year, `${year + 1}-12-01T00:00:00.000Z`);
+      report.push({ id: "census_acs", label: `Census ACS ${year} 5-year (vs ${year - 5})`, url: "api.census.gov", pulledAt, records: latest.size });
+    } catch (e) {
+      console.error(`Census ACS skipped: ${e.message}`);
+    }
+  }
   const out = { version: 1, generatedAt: pulledAt, sinceDays: opt.since, sweptZips: opt.zips, sources: report, market, properties: props };
   await mkdir(dirname(opt.out), { recursive: true });
   await writeFile(opt.out, JSON.stringify(out));

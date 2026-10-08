@@ -29,6 +29,8 @@ export type SourceId =
   | "flood"
   | "opportunity_zone"
   | "transit"
+  | "hud_safmr"
+  | "census_acs"
   | "county_parcels"
   | "market"
   | "manual"
@@ -58,6 +60,8 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
   flood: { label: "FEMA flood hazard layer", kind: "government", maxAgeDays: 1825 },
   opportunity_zone: { label: "Federal Opportunity Zone tracts", kind: "government", maxAgeDays: 3650 },
   transit: { label: "MARTA GTFS rail stations", kind: "government", maxAgeDays: 730 },
+  hud_safmr: { label: "HUD Small Area Fair Market Rents (ZIP)", kind: "government", maxAgeDays: 500 },
+  census_acs: { label: "Census ACS 5-year (ZIP tabulation area)", kind: "government", maxAgeDays: 900 },
   county_parcels: { label: "Metro county assessor parcels", kind: "government", maxAgeDays: 400 },
   market: { label: "Derived from public permits + assessor records", kind: "derived", maxAgeDays: 120 },
   manual: { label: "Entered by you", kind: "manual", maxAgeDays: 180 },
@@ -189,6 +193,10 @@ export interface PropertyRecord {
   opportunityZone?: boolean | null;
 
   rentEstimate?: { value: number; source: SourceId; asOf: string | null } | null;
+  /** Every independent rent figure for this property (HUD SAFMR by bedrooms, ACS median, your own comps). */
+  rentEstimates?: { value: number; source: SourceId; asOf: string | null; basis: string }[];
+  /** Pool-only sale used for comps (not a lead): EXAMPLE data or sold parcels from a ZIP sweep. */
+  compOnly?: boolean;
   /** Field → where it came from, as pulled. */
   provenance?: Record<string, { source: SourceId; asOf: string | null }>;
 }
@@ -204,6 +212,9 @@ export interface MarketContext {
   renovationPermits12?: number | null;
   newConstructionPermits12?: number | null;
   demolitionPermits12?: number | null;
+  popGrowthPct?: number | null; // 5-year, ACS
+  medianIncome?: number | null; // ACS
+  incomeGrowthPct?: number | null; // 5-year, ACS
   asOf: string | null;
   source: SourceId;
 }
@@ -437,12 +448,15 @@ export function remainingBalance(amount: number, rate: number, years: number, mo
   return amount * Math.pow(1 + r, months) - (pmt * (Math.pow(1 + r, months) - 1)) / r;
 }
 
-export function estimateValue(p: PropertyRecord, m: MarketContext | undefined, now: Date): ValueEstimate {
+export function estimateValue(p: PropertyRecord, m: MarketContext | undefined, now: Date, comps: CompSet | null = null): ValueEstimate {
   const county = has(p.fairMarketValue) ? p.fairMarketValue : null;
   const comp = m && has(m.medianPpsf) && has(p.sqft) ? m.medianPpsf * p.sqft : null;
   let current: number | null = null;
   let currentBasis = "No value on file";
-  if (county != null && comp != null) {
+  if (comps?.asIsValue != null) {
+    current = county != null ? Math.round((county + comps.asIsValue) / 2) : comps.asIsValue;
+    currentBasis = `${county != null ? `Average of county appraisal ${money(county)} and ` : ""}${comps.asIs.length} as-is sales within ${comps.radiusMi} mi (median ${money(median(comps.asIs.map((c) => c.ppsf))!)}/sq ft)`;
+  } else if (county != null && comp != null) {
     current = Math.round((county + comp) / 2);
     currentBasis = `Average of county appraisal ${money(county)} and ${p.sqft} sq ft × ${money(m!.medianPpsf!)}/sq ft area median`;
   } else if (county != null) {
@@ -452,8 +466,12 @@ export function estimateValue(p: PropertyRecord, m: MarketContext | undefined, n
     current = Math.round(comp);
     currentBasis = "Sq ft × area median $/sq ft";
   }
-  const arv = m && has(m.renovatedPpsf) && has(p.sqft) ? Math.round(m.renovatedPpsf * p.sqft) : null;
-  const arvBasis = arv != null ? `${p.sqft} sq ft × ${money(m!.renovatedPpsf!)}/sq ft renovated sales in ${m!.key}` : "No renovated-sale evidence for this area";
+  let arv = m && has(m.renovatedPpsf) && has(p.sqft) ? Math.round(m.renovatedPpsf * p.sqft) : null;
+  let arvBasis = arv != null ? `${p.sqft} sq ft × ${money(m!.renovatedPpsf!)}/sq ft renovated sales in ${m!.key} (ZIP average)` : "No renovated-sale evidence for this area";
+  if (comps?.arv != null) {
+    arv = comps.arv;
+    arvBasis = `${p.sqft} sq ft × ${money(median(comps.renovated.map((c) => c.ppsf))!)}/sq ft, median of ${comps.renovated.length} renovated sales within ${comps.radiusMi} mi`;
+  }
 
   let debt: number | null = null;
   let debtBasis = "Debt unknown: no mortgage records pulled";
@@ -515,7 +533,7 @@ export function equityEngine(p: PropertyRecord, v: ValueEstimate, now: Date): En
   return engine("equity", f, unknowns);
 }
 
-export function valueGapEngine(p: PropertyRecord, v: ValueEstimate, m: MarketContext | undefined): EngineResult {
+export function valueGapEngine(p: PropertyRecord, v: ValueEstimate, m: MarketContext | undefined, comps: CompSet | null = null): EngineResult {
   const f: Finding[] = [];
   const unknowns: string[] = [];
   if (v.arv == null || v.current == null) {
@@ -529,7 +547,9 @@ export function valueGapEngine(p: PropertyRecord, v: ValueEstimate, m: MarketCon
       text: `Renovated homes nearby trade ${money(gap)} (${Math.round(gapPct * 100)}%) above this one's estimated value`,
       points: clamp(gapPct * 160, 0, 70),
       evidence: [
-        { source: "market", detail: v.arvBasis, observedAt: m?.asOf ?? null, inferred: true },
+        ...(comps?.arv != null
+          ? comps.renovated.map((c) => ({ source: c.source, detail: `${c.address} sold ${money(c.price)} (${money(c.ppsf)}/sq ft), ${c.miles} mi, ${c.why}`, observedAt: c.saleDate, ref: c.id }))
+          : [{ source: "market" as const, detail: v.arvBasis, observedAt: m?.asOf ?? null, inferred: true }]),
         { source: prov(p, "fairMarketValue", "fulton_cama").source, detail: v.currentBasis, observedAt: prov(p, "fairMarketValue", "fulton_cama").asOf },
       ],
     });
@@ -599,6 +619,10 @@ export function marketEngine(m: MarketContext | undefined): EngineResult {
   if (has(m.rentGrowthPct) && m.rentGrowthPct > 0) f.push({ text: `Rents up ${m.rentGrowthPct.toFixed(1)}% in ${m.key}`, points: clamp(m.rentGrowthPct * 4, 0, 25), evidence: ev("Rent trend") });
   const build = (m.renovationPermits12 ?? 0) + 2 * (m.newConstructionPermits12 ?? 0);
   if (build >= 15) f.push({ text: `${m.renovationPermits12 ?? 0} renovation + ${m.newConstructionPermits12 ?? 0} new-construction permits in 12 months`, points: clamp(build / 2, 0, 35), evidence: [{ source: "permits", detail: `${m.key} permit activity`, observedAt: m.asOf }] });
+  if (has(m.popGrowthPct) && m.popGrowthPct >= 3)
+    f.push({ text: `Population in ${m.key} up ${m.popGrowthPct.toFixed(1)}% over 5 years`, points: clamp(m.popGrowthPct * 2, 0, 15), evidence: [{ source: "census_acs", detail: "ACS 5-year population", observedAt: m.asOf }] });
+  if (has(m.incomeGrowthPct) && m.incomeGrowthPct >= 10)
+    f.push({ text: `Median household income in ${m.key} up ${Math.round(m.incomeGrowthPct)}% over 5 years`, points: 10, evidence: [{ source: "census_acs", detail: `ACS median income${has(m.medianIncome) ? ` ${money(m.medianIncome)}` : ""}`, observedAt: m.asOf }] });
   if (has(m.renovatedPpsf) && has(m.medianPpsf) && m.medianPpsf > 0 && m.renovatedPpsf / m.medianPpsf >= 1.3)
     f.push({ text: `Renovated homes sell ${Math.round((m.renovatedPpsf / m.medianPpsf - 1) * 100)}% above the area median per sq ft`, points: 15, evidence: ev("Renovation premium") });
   return engine("market", f, []);
@@ -649,6 +673,15 @@ export function conclusions(p: PropertyRecord, engines: Record<EngineKey, Engine
     conclusion("Renovation opportunity", [...engines.valueGap.findings.flatMap((x) => x.evidence), ...pick("distress", /renovation permit/)]),
     conclusion("Development potential", engines.development.findings.filter((x) => x.points > 0).flatMap((x) => x.evidence)),
   ];
+  const rents = p.rentEstimates ?? [];
+  if (rents.length) {
+    const vals = rents.map((r) => r.value);
+    // ACS medians include apartments, so they run below a house's rent: allow a wider band when ACS is one side.
+    const band = rents.some((r) => r.source === "census_acs") ? 1.35 : 1.25;
+    const agree = Math.max(...vals) / Math.min(...vals) <= band;
+    const c = conclusion("Rent", rents.map((r) => ({ source: r.source, detail: `${money(r.value)}/mo · ${r.basis}`, observedAt: r.asOf })));
+    if (c) out.push({ ...c, corroborated: c.corroborated && agree, label: agree ? "Rent" : `Rent (sources disagree by more than ${Math.round((band - 1) * 100)}%)` });
+  }
   return out.filter((c): c is Conclusion => !!c);
 }
 
@@ -699,7 +732,7 @@ export function strategies(p: PropertyRecord, v: ValueEstimate, e: Record<Engine
     economics: flipProfit != null ? `ARV ${money(v.arv!)} − ${SCREEN.flipCostPct * 100}% costs − purchase at 85% of value − ${rehab.tier} rehab ${money(rehab.value!)} ≈ ${money(flipProfit)}` : "Needs ARV + square footage",
     value: flipProfit,
   });
-  const rent = p.rentEstimate?.value ?? null;
+  const rent = chooseRent(p)?.value ?? null;
   const rtv = rent != null && v.current != null ? rent / (v.current + (rehab.value ?? 0)) : null;
   out.push({
     key: "rental",
@@ -771,6 +804,7 @@ export interface Intel {
   p: PropertyRecord;
   engines: Record<EngineKey, EngineResult>;
   value: ValueEstimate;
+  comps: CompSet | null;
   score: number;
   confidence: number;
   conclusions: Conclusion[];
@@ -786,14 +820,15 @@ export interface Intel {
   primarySignal: string;
 }
 
-export function analyze(p: PropertyRecord, market: Record<string, MarketContext>, now: Date): Intel {
+export function analyze(p: PropertyRecord, market: Record<string, MarketContext>, now: Date, index: CompIndex | null = null): Intel {
   const m = (p.zip && market[p.zip]) || (p.neighborhood && market[p.neighborhood]) || undefined;
-  const v = estimateValue(p, m, now);
+  const comps = index ? findComps(p, index, now) : null;
+  const v = estimateValue(p, m, now, comps);
   const engines: Record<EngineKey, EngineResult> = {
     distress: distressEngine(p, now),
     motivation: motivationEngine(p, now),
     equity: equityEngine(p, v, now),
-    valueGap: valueGapEngine(p, v, m),
+    valueGap: valueGapEngine(p, v, m, comps),
     development: developmentEngine(p, now),
     market: marketEngine(m),
     risk: riskEngine(p, v, now),
@@ -855,6 +890,7 @@ export function analyze(p: PropertyRecord, market: Record<string, MarketContext>
     p,
     engines,
     value: v,
+    comps,
     score,
     confidence,
     conclusions: conclusions(p, engines),
@@ -872,5 +908,136 @@ export function analyze(p: PropertyRecord, market: Record<string, MarketContext>
 }
 
 export function analyzeAll(props: PropertyRecord[], market: Record<string, MarketContext>, now: Date): Intel[] {
-  return props.map((p) => analyze(p, market, now)).sort((a, b) => b.score - a.score || b.confidence - a.confidence);
+  const index = buildCompIndex(props, now);
+  return props
+    .filter((p) => !p.compOnly)
+    .map((p) => analyze(p, market, now, index))
+    .sort((a, b) => b.score - a.score || b.confidence - a.confidence);
+}
+
+// ─── Rent ───────────────────────────────────────────────────────────────────
+
+/** One rent to underwrite with: HUD SAFMR for the bedroom count first, then your own figure, then anything else. */
+export function chooseRent(p: PropertyRecord): { value: number; source: SourceId; basis: string } | null {
+  const all = [...(p.rentEstimates ?? []), ...(p.rentEstimate ? [{ ...p.rentEstimate, basis: "On file" }] : [])];
+  const order: SourceId[] = ["hud_safmr", "manual", "census_acs"];
+  all.sort((a, b) => (order.indexOf(a.source) + 1 || 9) - (order.indexOf(b.source) + 1 || 9));
+  return all[0] ? { value: all[0].value, source: all[0].source, basis: all[0].basis } : null;
+}
+
+// ─── Public-record comps ────────────────────────────────────────────────────
+
+export interface Comp {
+  id: string;
+  address: string;
+  lat: number;
+  lng: number;
+  miles: number;
+  saleDate: string;
+  price: number;
+  sqft: number;
+  ppsf: number;
+  renovated: boolean;
+  why: string;
+  source: SourceId;
+}
+
+export interface CompSet {
+  renovated: Comp[];
+  asIs: Comp[];
+  radiusMi: number;
+  arv: number | null;
+  asIsValue: number | null;
+}
+
+/** Transfers that don't reflect market value: family, estate, foreclosure, corrective. */
+export const NON_ARMS_LENGTH = /QUIT|\bQCD\b|EXECUT|ADMINISTRAT|ESTATE|UNDER POWER|\bDUP\b|SHERIFF|GIFT|CORRECTIVE|LOVE AND AFFECTION/i;
+
+const median = (xs: number[]) => {
+  const s = xs.filter((x) => isFinite(x)).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const k = Math.floor(s.length / 2);
+  return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
+};
+
+const CELL = 0.01; // degrees ≈ 0.6–0.7 mi around Atlanta
+export interface CompIndex {
+  cells: Map<string, PropertyRecord[]>;
+}
+
+/** Arm's-length, priced sale with the facts a comp needs. */
+export function isUsableSale(p: PropertyRecord, now: Date): boolean {
+  if (p.lat == null || p.lng == null || !has(p.sqft) || p.sqft < 400 || !p.lastSaleDate || !has(p.lastSalePrice) || p.lastSalePrice < 10000) return false;
+  if (daysBetween(new Date(p.lastSaleDate), now) > 548) return false;
+  const t = (p.transfers ?? []).find((x) => x.date.slice(0, 10) === p.lastSaleDate!.slice(0, 10));
+  if (t && NON_ARMS_LENGTH.test(t.deedType ?? "")) return false;
+  if (has(p.fairMarketValue) && p.fairMarketValue > 0) {
+    const r = p.lastSalePrice / p.fairMarketValue;
+    if (r < 0.3 || r > 4) return false;
+  }
+  return true;
+}
+
+export function buildCompIndex(props: PropertyRecord[], now: Date): CompIndex {
+  const cells = new Map<string, PropertyRecord[]>();
+  for (const p of props) {
+    if (!isUsableSale(p, now)) continue;
+    const k = `${Math.floor(p.lat! / CELL)}:${Math.floor(p.lng! / CELL)}`;
+    cells.set(k, [...(cells.get(k) ?? []), p]);
+  }
+  return { cells };
+}
+
+function milesApart(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toR = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(toR(b.lat - a.lat) / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(toR(b.lng - a.lng) / 2) ** 2;
+  return 2 * 3958.8 * Math.asin(Math.sqrt(h));
+}
+
+/** Renovated = a renovation / new-construction permit in the 2 years before the sale (or a new build). */
+export function renovatedAtSale(c: PropertyRecord): string | null {
+  const sale = new Date(c.lastSaleDate!).getTime();
+  const permit = (c.permits ?? []).find((x) => (x.category === "renovation" || x.category === "new_construction") && x.issuedAt && sale - new Date(x.issuedAt).getTime() <= 730 * DAY && new Date(x.issuedAt).getTime() - sale <= 60 * DAY);
+  if (permit) return `renovated (permit ${permit.id}, ${permit.issuedAt!.slice(0, 7)})`;
+  if (has(c.yearBuilt) && c.yearBuilt >= new Date(c.lastSaleDate!).getFullYear() - 1) return `new build (${c.yearBuilt})`;
+  return null;
+}
+
+/**
+ * Nearest similar sales (±30% sq ft, last 12 months, widening to 18) within
+ * 0.5 → 1 → 1.5 mi, split into renovated and as-is. Three or more of a kind
+ * set ARV / as-is value; fewer and the engine falls back to ZIP averages.
+ */
+export function findComps(p: PropertyRecord, index: CompIndex, now: Date): CompSet | null {
+  if (p.lat == null || p.lng == null || !has(p.sqft)) return null;
+  const here = { lat: p.lat, lng: p.lng };
+  let best: CompSet | null = null;
+  for (const [radius, months] of [[0.5, 12], [1, 12], [1.5, 18]] as const) {
+    const span = Math.ceil(radius / 0.55);
+    const ci = Math.floor(p.lat / CELL), cj = Math.floor(p.lng / CELL);
+    const found: Comp[] = [];
+    for (let i = ci - span; i <= ci + span; i++)
+      for (let j = cj - span; j <= cj + span; j++)
+        for (const c of index.cells.get(`${i}:${j}`) ?? []) {
+          if (c.id === p.id) continue;
+          if (Math.abs(c.sqft! - p.sqft) / p.sqft > 0.3) continue;
+          if (daysBetween(new Date(c.lastSaleDate!), now) > months * 30.5) continue;
+          const miles = milesApart(here, { lat: c.lat!, lng: c.lng! });
+          if (miles > radius) continue;
+          const why = renovatedAtSale(c);
+          found.push({ id: c.id, address: c.address, lat: c.lat!, lng: c.lng!, miles: Math.round(miles * 100) / 100, saleDate: c.lastSaleDate!, price: c.lastSalePrice!, sqft: c.sqft!, ppsf: Math.round(c.lastSalePrice! / c.sqft!), renovated: !!why, why: why ?? "sold as-is (no recent permit)", source: c.provenance?.lastSalePrice?.source ?? "deeds" });
+        }
+    found.sort((a, b) => a.miles - b.miles);
+    const renovated = found.filter((c) => c.renovated).slice(0, 5);
+    const asIs = found.filter((c) => !c.renovated).slice(0, 5);
+    best = {
+      renovated,
+      asIs,
+      radiusMi: radius,
+      arv: renovated.length >= 3 ? Math.round(median(renovated.map((c) => c.ppsf))! * p.sqft) : null,
+      asIsValue: asIs.length >= 3 ? Math.round(median(asIs.map((c) => c.ppsf))! * p.sqft) : null,
+    };
+    if (renovated.length >= 3 && asIs.length >= 3) break;
+  }
+  return best && (best.renovated.length || best.asIs.length) ? best : null;
 }

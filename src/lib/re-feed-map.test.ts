@@ -155,3 +155,48 @@ test("non-Atlanta parcels skip the Atlanta zoning table", () => {
   assert.ok(atl.engines.development.score > 0);
   assert.equal(dek.engines.development.score, 0);
 });
+
+import { mapSafmr, attachSafmr, parseAcs, attachAcs } from "./re-feed-map.ts";
+import { findComps, buildCompIndex, chooseRent, type MarketContext } from "./re-intel.ts";
+
+test("HUD SAFMR: picks the bedroom column; ACS adds a cross-check rent and 5-year growth", () => {
+  const safmr = mapSafmr([{ "ZIP Code": "30310", "SAFMR 0BR": "1100", "SAFMR 1BR": "1210", "SAFMR 2BR": "1390", "SAFMR 3BR": "1760", "SAFMR 4BR": "2100" }]);
+  const props: PropertyRecord[] = [{ id: "a", address: "x", zip: "30310", lat: 1, lng: 1, beds: 3 }, { id: "b", address: "y", zip: "30310", lat: 1, lng: 1, sqft: 900 }];
+  attachSafmr(props, safmr, "2026-10-01");
+  assert.equal(props[0].rentEstimates![0].value, 1760);
+  assert.match(props[1].rentEstimates![0].basis, /assumed/);
+  const latest = parseAcs([["B25064_001E", "B01003_001E", "B19013_001E", "zip code tabulation area"], ["1250", "33000", "52000", "30310"]]);
+  const earlier = parseAcs([["B25064_001E", "B01003_001E", "B19013_001E", "zip code tabulation area"], ["1000", "30000", "40000", "30310"]]);
+  const market: Record<string, MarketContext> = { "30310": { key: "30310", asOf: null, source: "market" } };
+  attachAcs(props, market, latest, earlier, 2024, "2025-12-01");
+  assert.equal(market["30310"].popGrowthPct, 10);
+  assert.equal(market["30310"].incomeGrowthPct, 30);
+  assert.equal(props[0].rentEstimates!.length, 2);
+  assert.equal(chooseRent(props[0])!.source, "hud_safmr");
+  assert.equal(parseAcs([["B25064_001E", "zip code tabulation area"], ["-666666666", "30311"]]).get("30311")!.rent, null);
+});
+
+test("comps: renovated vs as-is split, distance/size/date filters, non-arm's-length dropped", () => {
+  const now = new Date("2026-10-08T00:00:00Z");
+  const sold = (id: string, dLat: number, sqft: number, price: number, daysAgo: number, reno: boolean, deedType = "WD"): PropertyRecord => {
+    const d = new Date(now.getTime() - daysAgo * 86_400_000).toISOString();
+    return { id, address: id, lat: 33.73 + dLat, lng: -84.41, sqft, lastSaleDate: d, lastSalePrice: price, transfers: [{ date: d, price, deedType }], permits: reno ? [{ id: `p${id}`, category: "renovation", type: "Alteration", issuedAt: new Date(now.getTime() - (daysAgo + 120) * 86_400_000).toISOString() }] : [] };
+  };
+  const subject: PropertyRecord = { id: "S", address: "S", lat: 33.73, lng: -84.41, sqft: 1000 };
+  const pool = [
+    subject,
+    sold("R1", 0.001, 1000, 300000, 30, true), sold("R2", 0.002, 1100, 310000, 60, true), sold("R3", 0.003, 950, 280000, 90, true),
+    sold("A1", 0.001, 1000, 150000, 40, false), sold("A2", 0.002, 1050, 160000, 50, false), sold("A3", 0.003, 900, 140000, 70, false),
+    sold("FAR", 0.05, 1000, 900000, 30, true), // ~3.5 mi
+    sold("BIG", 0.001, 3000, 900000, 30, true), // too big
+    sold("OLD", 0.001, 1000, 900000, 700, true), // too old
+    sold("QCD", 0.001, 1000, 20000, 30, false, "Quitclaim Deed"), // family transfer
+  ];
+  const c = findComps(subject, buildCompIndex(pool, now), now)!;
+  assert.deepEqual(c.renovated.map((x) => x.id).sort(), ["R1", "R2", "R3"]);
+  assert.deepEqual(c.asIs.map((x) => x.id).sort(), ["A1", "A2", "A3"]);
+  assert.equal(c.radiusMi, 0.5);
+  assert.equal(c.arv, 295000); // median of 300, 282, 295 $/sq ft × 1000
+  const v = estimateValue(subject, undefined, now, c);
+  assert.match(v.arvBasis, /median of 3 renovated sales/);
+});

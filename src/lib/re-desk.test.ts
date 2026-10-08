@@ -88,3 +88,25 @@ test("money screen counts funnel and closed value", () => {
   assert.equal(m.funnel[0].count, all.length);
   assert.ok(m.estimatedEquity > 0);
 });
+
+import { nextForeclosureSale, todayBrief } from "./re-desk.ts";
+
+test("Georgia foreclosure sale: first Tuesday, July 4th / New Year's shift to Wednesday", () => {
+  assert.equal(nextForeclosureSale(new Date("2026-10-08T12:00:00Z")).toISOString().slice(0, 10), "2026-11-03");
+  assert.equal(nextForeclosureSale(new Date("2026-11-03T08:00:00Z")).toISOString().slice(0, 10), "2026-11-03");
+  assert.equal(nextForeclosureSale(new Date("2028-06-10T12:00:00Z")).toISOString().slice(0, 10), "2028-07-05"); // Jul 4 2028 is a Tuesday
+  assert.equal(nextForeclosureSale(new Date("2030-12-20T12:00:00Z")).toISOString().slice(0, 10), "2031-01-07");
+});
+
+test("today briefing: due follow-ups, new signals, top untouched", () => {
+  const id = all[0].p.id;
+  const st = applyActivity(undefined, { id: "a", parcelId: id, at: "2026-10-06T12:00:00Z", kind: "call", outcome: "no_answer" });
+  const b = todayBrief(all, { [id]: st }, [{ id: "a", parcelId: id, at: "2026-10-07T20:00:00Z", kind: "call", outcome: "no_answer" }], NOW);
+  assert.equal(b.due.length, 1);
+  assert.equal(b.due[0].intel.p.id, id);
+  assert.ok(b.newSignals.length > 0 && !b.newSignals.some((i) => i.p.id === id));
+  assert.ok(b.top.length > 0 && !b.top.some((x) => x.intel.p.id === id));
+  assert.equal(b.saleDate, "2026-11-03");
+  assert.equal(b.daysToSale, 26);
+  assert.equal(b.touchedYesterday, 1);
+});
