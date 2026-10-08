@@ -7,9 +7,19 @@
  *   /deals   Deal Desk on fictional EXAMPLE properties (real Atlanta records
  *            hold owner names and never go to a public URL)
  *
- * Build the pages first:  node deploy/geye/build-site.mjs
- * Deploy (laptop):        npx wrangler deploy -c deploy/geye/wrangler.jsonc
- * Deploy (CI):            .github/workflows/geye-deploy.yml
+ * Same pattern as opticom.successagenticlabs.com and dawgman.successagenticlabs.com
+ * (account df84774bba1198ab9b93ba0901ab0073, thothestates; Free plan). Deploy
+ * from the laptop with wrangler's stored OAuth login and the vendored wrangler
+ * (the .cmd shim breaks on the space in "Genius Laude"):
+ *
+ *   node deploy/geye/build-site.mjs
+ *   cd deploy/geye
+ *   node ../../../success-agentic-labs/node_modules/wrangler/bin/wrangler.js deploy --env staging   (optional test copy)
+ *   node ../../../success-agentic-labs/node_modules/wrangler/bin/wrangler.js deploy
+ *
+ * Then record "LIVE <date>, version <id>; rollback <previous id>" in memory.
+ * CI (.github/workflows/geye-deploy.yml) deploys only if the repo has
+ * CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID secrets; it is off by default.
  */
 {
 	"$schema": "../../node_modules/wrangler/config-schema.json",
@@ -25,11 +35,17 @@
 
 	"observability": { "enabled": false },
 
-	// Same as the apex: reachable only through the custom domain.
-	"workers_dev": false,
+	// Backup URL, as on opticom-site: godseye.thothestates.workers.dev
+	"workers_dev": true,
 	"preview_urls": false,
 
 	// A Workers Custom Domain on the successagenticlabs.com zone. Cloudflare
 	// creates the DNS record and certificate on the first deploy.
-	"routes": [{ "pattern": "geye.successagenticlabs.com", "custom_domain": true }]
+	"routes": [{ "pattern": "geye.successagenticlabs.com", "custom_domain": true }],
+
+	// Test copy, as opticom-site-staging: workers.dev only, no custom domain.
+	//   godseye-staging.thothestates.workers.dev
+	"env": {
+		"staging": { "name": "godseye-staging", "routes": [], "workers_dev": true }
+	}
 }

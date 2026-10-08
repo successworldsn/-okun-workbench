@@ -1,19 +1,17 @@
-# Publishes geye.successagenticlabs.com (assets-only Cloudflare Worker, see
-# deploy/geye/wrangler.jsonc). Runs after each GA infrastructure feed so the
-# live Capital Desk refreshes weekly, on a change to deploy/** or the desks on a
-# claude/* branch, or by hand. Needs repo secrets CLOUDFLARE_API_TOKEN
-# (Workers Scripts:Edit + Workers Custom Domains / zone DNS:Edit on
-# successagenticlabs.com) and CLOUDFLARE_ACCOUNT_ID; without them it builds
-# and stops. Public data only: the real-estate page is the EXAMPLE set.
+# Optional CI deploy of geye.successagenticlabs.com (assets-only Cloudflare
+# Worker, deploy/geye/wrangler.jsonc). The normal path is a laptop deploy with
+# wrangler's OAuth login, after you say deploy. This workflow runs only:
+#   - by hand (Actions -> geye deploy -> Run workflow), or
+#   - after each weekly GA infrastructure feed, if the repo variable
+#     GEYE_AUTO_DEPLOY is "true" (you opt in to weekly data refreshes).
+# Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID; without
+# them it builds the site and stops. Public data only: /deals is EXAMPLE data.
 name: geye deploy
 
 on:
   workflow_run:
     workflows: ["GA infrastructure feed"]
     types: [completed]
-  push:
-    branches: ["main", "claude/**"]
-    paths: ["deploy/geye/**", "src/components/**", "src/lib/ci-*.ts", "src/lib/re-*.ts", "tools/godseye-preview/**", "data/public/**", "public/ci-sat/**"]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +23,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || (vars.GEYE_AUTO_DEPLOY == 'true' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

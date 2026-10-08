@@ -270,6 +270,40 @@ connector so GREEN actions can go out under the same rules. Preview build:
 branch (scheduled workflows only run from there) and deploy, with the same
 two Supabase values in the host's environment.
 
+## geye.successagenticlabs.com
+
+God's Eye is published as an assets-only Cloudflare Worker (`godseye`,
+config `deploy/geye/wrangler.jsonc`). It follows the same pattern as the
+opticom and dawgman subdomains: a Workers Custom Domain, so Cloudflare makes
+the DNS record and certificate itself.
+
+- `/` is the Capital Desk on the live public Georgia feed, with the satellite
+  photos and the grid.
+- `/deals` is the Deal Desk on the fictional EXAMPLE set. Real Atlanta
+  records hold owner names and never go to a public URL.
+- Both pages are `noindex`.
+- Backup URL: `godseye.thothestates.workers.dev`.
+- Test copy: `--env staging` deploys `godseye-staging.thothestates.workers.dev`
+  (no custom domain).
+
+Deploy from the laptop with wrangler's OAuth login. Use the vendored wrangler,
+because the `.cmd` shim breaks on the space in the user path:
+
+```
+node deploy/geye/build-site.mjs
+cd deploy/geye
+node ../../../success-agentic-labs/node_modules/wrangler/bin/wrangler.js deploy --env staging   # optional
+node ../../../success-agentic-labs/node_modules/wrangler/bin/wrangler.js deploy
+```
+
+The wrangler path assumes this repo sits next to `success-agentic-labs` in
+`fwdclaudecode`. After a deploy, record `LIVE <date>, version <id>; rollback
+<previous id>` in memory.
+
+`.github/workflows/geye-deploy.yml` is optional. It runs by hand, or weekly
+after the infrastructure feed when the repo variable `GEYE_AUTO_DEPLOY` is
+`true`. It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
+
 ## Setup
 
 Requires Node ≥ 18.
