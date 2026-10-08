@@ -10,6 +10,7 @@ import type { MarketContext, PropertyRecord } from "./re-intel";
 import { demoBuyers, demoMarket, demoProperties } from "./re-intel-demo";
 import type { Buyer } from "./re-buyers";
 import type { Contract } from "./re-contract";
+import type { Fieldwork, Photo } from "./re-field";
 import { applyActivity, type Activity, type DeskState } from "./re-desk";
 
 export interface FeedSource {
@@ -188,4 +189,52 @@ export async function putContract(c: Contract): Promise<void> {
   const { error } = await db().from("re_contracts").upsert({ parcel_id: c.parcelId, data: c, status: c.status, updated_at: c.updatedAt });
   if (isMissingTable(error)) throw new Error("Contract table not set up: apply the re_contracts section of schema.sql in Supabase.");
   if (error) throw error;
+}
+
+// ─── Field work (walk-through, photos, conversations) ───────────────────────
+
+const demoField = new Map<string, Fieldwork>();
+const emptyFw = (parcelId: string): Fieldwork => ({ parcelId, scope: null, walkedAt: null, photos: [], convos: [], updatedAt: new Date().toISOString() });
+
+export async function getFieldwork(): Promise<Record<string, Fieldwork>> {
+  if (DEMO_MODE) return Object.fromEntries(demoField);
+  const { data, error } = await db().from("re_fieldwork").select("parcel_id, data");
+  if (isMissingTable(error)) return {};
+  if (error) throw error;
+  return Object.fromEntries((data as { parcel_id: string; data: Fieldwork }[]).map((r) => [r.parcel_id, r.data]));
+}
+
+async function getOne(parcelId: string): Promise<Fieldwork> {
+  if (DEMO_MODE) return demoField.get(parcelId) ?? emptyFw(parcelId);
+  const { data, error } = await db().from("re_fieldwork").select("data").eq("parcel_id", parcelId).maybeSingle();
+  if (error && !isMissingTable(error)) throw error;
+  return (data as { data: Fieldwork } | null)?.data ?? emptyFw(parcelId);
+}
+
+async function putOne(fw: Fieldwork): Promise<Fieldwork> {
+  const next = { ...fw, updatedAt: new Date().toISOString() };
+  if (DEMO_MODE) {
+    demoField.set(fw.parcelId, next);
+    return next;
+  }
+  const { error } = await db().from("re_fieldwork").upsert({ parcel_id: fw.parcelId, data: next, updated_at: next.updatedAt });
+  if (isMissingTable(error)) throw new Error("Field-work table not set up: apply the re_fieldwork section of schema.sql in Supabase.");
+  if (error) throw error;
+  return next;
+}
+
+/** Scope + conversations; photos are kept as stored (they travel one at a time). */
+export async function putFieldworkText(fw: Pick<Fieldwork, "parcelId" | "scope" | "walkedAt" | "convos">): Promise<Fieldwork> {
+  const cur = await getOne(fw.parcelId);
+  return putOne({ ...cur, scope: fw.scope, walkedAt: fw.walkedAt, convos: fw.convos.slice(0, 30) });
+}
+
+export async function addFieldPhoto(parcelId: string, photo: Photo): Promise<Fieldwork> {
+  const cur = await getOne(parcelId);
+  return putOne({ ...cur, photos: [...cur.photos, photo].slice(-24) });
+}
+
+export async function removeFieldPhoto(parcelId: string, photoId: string): Promise<Fieldwork> {
+  const cur = await getOne(parcelId);
+  return putOne({ ...cur, photos: cur.photos.filter((x) => x.id !== photoId) });
 }

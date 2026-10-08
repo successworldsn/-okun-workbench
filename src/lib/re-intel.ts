@@ -34,6 +34,8 @@ export type SourceId =
   | "county_parcels"
   | "market"
   | "manual"
+  | "conversation"
+  | "walkthrough"
   | "rule";
 
 export interface SourceInfo {
@@ -65,6 +67,8 @@ export const SOURCES: Record<SourceId, SourceInfo> = {
   county_parcels: { label: "Metro county assessor parcels", kind: "government", maxAgeDays: 400 },
   market: { label: "Derived from public permits + assessor records", kind: "derived", maxAgeDays: 120 },
   manual: { label: "Entered by you", kind: "manual", maxAgeDays: 180 },
+  conversation: { label: "Your conversation with the owner", kind: "manual", maxAgeDays: 120 },
+  walkthrough: { label: "Your walk-through", kind: "manual", maxAgeDays: 180 },
   rule: { label: "Engine rule (inference)", kind: "derived", maxAgeDays: 36500 },
 };
 
@@ -195,11 +199,40 @@ export interface PropertyRecord {
   rentEstimate?: { value: number; source: SourceId; asOf: string | null } | null;
   /** Every independent rent figure for this property (HUD SAFMR by bedrooms, ACS median, your own comps). */
   rentEstimates?: { value: number; source: SourceId; asOf: string | null; basis: string }[];
+  /** Your walk-through scope total (WALK tab) — replaces the size-based rehab screen. */
+  rehabBudget?: { value: number; asOf: string; lines: number } | null;
+  /** Latest owner conversation (TALK tab). */
+  fieldNotes?: FieldNotes | null;
   /** Pool-only sale used for comps (not a lead): EXAMPLE data or sold parcels from a ZIP sweep. */
   compOnly?: boolean;
   /** Field → where it came from, as pulled. */
   provenance?: Record<string, { source: SourceId; asOf: string | null }>;
 }
+
+/** What the owner told you (TALK tab). Owner statements, dated, never treated as public record. */
+export interface FieldNotes {
+  at: string;
+  spokeWith: "owner" | "heir" | "tenant" | "agent" | "other";
+  occupancy: "owner" | "tenant" | "vacant" | "unknown";
+  condition: 1 | 2 | 3 | 4 | 5 | null; // 1 = needs everything, 5 = move-in ready
+  issues: string[];
+  timeline: "asap" | "30_90" | "3_6" | "no_rush" | "not_selling" | "unknown";
+  reasons: string[];
+  askingPrice: number | null;
+  statedPayoff: number | null;
+  behindOnPayments: boolean | null;
+  otherDecisionMakers: boolean | null;
+  notes?: string;
+}
+
+export const TIMELINE_LABELS: Record<FieldNotes["timeline"], string> = {
+  asap: "As soon as possible",
+  "30_90": "30–90 days",
+  "3_6": "3–6 months",
+  no_rush: "No rush",
+  not_selling: "Not selling",
+  unknown: "Didn't say",
+};
 
 export interface MarketContext {
   key: string; // zip or neighborhood
@@ -355,9 +388,11 @@ export function distressEngine(p: PropertyRecord, now: Date): EngineResult {
       evidence: hist.map((c) => ({ source: "code_history" as const, detail: `${c.type || "Code case"}${c.status ? ` · ${c.status}` : ""}`, observedAt: c.openedAt, ref: c.id })),
     });
 
+  const fn = p.fieldNotes;
   const vacantEv: Evidence[] = (p.codeCases ?? [])
     .filter((c) => c.vacant || c.boarded)
-    .map((c) => ({ source: c.source, detail: [c.vacant && "vacant", c.boarded && "boarded"].filter(Boolean).join(" + ") + " flag on case", observedAt: c.openedAt, ref: c.id }));
+    .map((c) => ({ source: c.source, detail: [c.vacant && "vacant", c.boarded && "boarded"].filter(Boolean).join(" + ") + " flag on case", observedAt: c.openedAt, ref: c.id } as Evidence));
+  if (fn?.occupancy === "vacant") vacantEv.push({ source: "conversation", detail: `${fn.spokeWith === "owner" ? "Owner" : "Contact"} says it's vacant`, observedAt: fn.at });
   if (vacantEv.length) f.push({ text: "Vacant / boarded indicator", points: 15, evidence: vacantEv });
 
   const demo = (p.permits ?? []).filter((x) => x.category === "demolition");
@@ -378,7 +413,11 @@ export function distressEngine(p: PropertyRecord, now: Date): EngineResult {
       points: 5,
       evidence: [{ source: "rule", detail: "Old structure + no recent renovation permits suggests deferred maintenance", observedAt: null, inferred: true }],
     });
-  unknowns.push("Interior condition (site visit)");
+  if (fn?.condition != null && fn.condition <= 2)
+    f.push({ text: `Owner reports major issues${fn.issues.length ? `: ${fn.issues.join(", ")}` : ""}`, points: 15, evidence: [{ source: "conversation", detail: `Condition ${fn.condition}/5 by the owner's account`, observedAt: fn.at }] });
+  if (p.rehabBudget && has(p.sqft) && p.rehabBudget.value / p.sqft >= 50)
+    f.push({ text: `Walk-through scope is heavy (${money(p.rehabBudget.value)}, ${money(p.rehabBudget.value / p.sqft)}/sq ft)`, points: 10, evidence: [{ source: "walkthrough", detail: `${p.rehabBudget.lines} line items`, observedAt: p.rehabBudget.asOf }] });
+  if (!p.rehabBudget && fn?.condition == null) unknowns.push("Interior condition (site visit)");
   return engine("distress", f, unknowns);
 }
 
@@ -424,7 +463,15 @@ export function motivationEngine(p: PropertyRecord, now: Date): EngineResult {
       points: 12,
       evidence: [{ source: "rule", detail: "Absentee + no homestead + code case", observedAt: null, inferred: true }],
     });
-  unknowns.push("Owner's actual intent (conversation)");
+  const fn = p.fieldNotes;
+  if (fn) {
+    const ev = (d: string): Evidence[] => [{ source: "conversation", detail: d, observedAt: fn.at }];
+    if (fn.timeline === "asap") f.push({ text: "Owner wants to sell as soon as possible", points: 25, evidence: ev("Timeline: ASAP") });
+    else if (fn.timeline === "30_90") f.push({ text: "Owner wants to sell in 30–90 days", points: 15, evidence: ev("Timeline: 30–90 days") });
+    else if (fn.timeline === "not_selling") f.push({ text: "Owner says they're not selling", points: -40, evidence: ev("Timeline: not selling") });
+    if (fn.reasons.length) f.push({ text: `Reasons to sell: ${fn.reasons.join(", ")}`, points: Math.min(20, 7 * fn.reasons.length), evidence: ev(fn.reasons.join(", ")) });
+    if (fn.behindOnPayments) f.push({ text: "Owner says they're behind on payments", points: 15, evidence: ev("Behind on mortgage payments") });
+  } else unknowns.push("Owner's actual intent (conversation)");
   return engine("motivation", f, unknowns);
 }
 
@@ -476,7 +523,11 @@ export function estimateValue(p: PropertyRecord, m: MarketContext | undefined, n
   let debt: number | null = null;
   let debtBasis = "Debt unknown: no mortgage records pulled";
   const open = openMortgages(p);
-  if (p.deedsCheckedAt && !open.length) {
+  const stated = p.fieldNotes?.statedPayoff;
+  if (stated != null) {
+    debt = stated;
+    debtBasis = `Owner stated payoff ${money(stated)} on ${p.fieldNotes!.at.slice(0, 10)}${p.deedsCheckedAt ? ` (deed index shows ${open.length} open security deed${open.length === 1 ? "" : "s"})` : ""} — confirm with a payoff letter`;
+  } else if (p.deedsCheckedAt && !open.length) {
     debt = 0;
     debtBasis = (p.mortgages ?? []).length
       ? `Every recorded security deed has a cancellation on record (index searched ${p.deedsCheckedAt.slice(0, 10)})`
@@ -509,10 +560,11 @@ export function equityEngine(p: PropertyRecord, v: ValueEstimate, now: Date): En
   const unknowns: string[] = [];
   if (v.current == null) unknowns.push("Current value");
   if (v.equity != null && v.equityPct != null) {
-    const inferredDebt = !p.deedsCheckedAt && !openMortgages(p).length;
+    const statedDebt = p.fieldNotes?.statedPayoff != null;
+    const inferredDebt = !statedDebt && !p.deedsCheckedAt && !openMortgages(p).length;
     const ev: Evidence[] = [
       { source: prov(p, "fairMarketValue", "fulton_cama").source, detail: `Value: ${v.currentBasis}`, observedAt: prov(p, "fairMarketValue", "fulton_cama").asOf },
-      { source: inferredDebt ? "rule" : "deeds", detail: v.debtBasis, observedAt: p.deedsCheckedAt ?? null, inferred: inferredDebt },
+      { source: statedDebt ? "conversation" : inferredDebt ? "rule" : "deeds", detail: v.debtBasis, observedAt: statedDebt ? p.fieldNotes!.at : p.deedsCheckedAt ?? null, inferred: inferredDebt },
     ];
     const pts = v.equityPct >= 0.8 ? 55 : v.equityPct >= 0.5 ? 40 : v.equityPct >= 0.3 ? 20 : 0;
     if (pts) f.push({ text: `Estimated equity ${money(v.equity)} (${Math.round(v.equityPct * 100)}%)`, points: pts, evidence: ev });
@@ -638,6 +690,9 @@ export function riskEngine(p: PropertyRecord, v: ValueEstimate, now: Date): Engi
     if (days >= 0 && days <= 14) f.push({ text: `Only ${days} days to the foreclosure sale`, points: 15, evidence: [{ source: "foreclosure_notice", detail: `Sale ${p.foreclosure.saleDate.slice(0, 10)}`, observedAt: p.foreclosure.noticeDate ?? null }] });
   }
   if (v.equityPct != null && v.equityPct < 0.1) f.push({ text: "Little or no equity: owner may not be able to sell at a discount", points: 25, evidence: [{ source: "rule", detail: v.debtBasis, observedAt: null, inferred: true }] });
+  const fnr = p.fieldNotes;
+  if (fnr?.occupancy === "tenant") f.push({ text: "Tenant-occupied: lease, deposit and possible eviction to handle", points: 10, evidence: [{ source: "conversation", detail: "Occupancy: tenant", observedAt: fnr.at }] });
+  if (fnr?.otherDecisionMakers) f.push({ text: "Other people must sign (co-owners or heirs)", points: 5, evidence: [{ source: "conversation", detail: "Other decision makers", observedAt: fnr.at }] });
   const fd = (p.transfers ?? []).find((t) => FORECLOSURE_DEED.test(t.deedType ?? ""));
   if (fd) f.push({ text: "Went through foreclosure before (deed under power on record)", points: 5, evidence: [{ source: "deeds", detail: fd.deedType ?? "", observedAt: fd.date, ref: fd.ref }] });
   if (has(p.yearBuilt) && p.yearBuilt < 1978) f.push({ text: `Built ${p.yearBuilt}: lead-paint disclosure and possible asbestos`, points: 5, evidence: [{ source: prov(p, "yearBuilt", "fulton_cama").source, detail: `Year built ${p.yearBuilt}`, observedAt: null }] });
@@ -707,7 +762,11 @@ export interface StrategyRead {
   value: number | null; // rough $ the strategy could produce
 }
 
-export function rehabEstimate(p: PropertyRecord, distress: number): { value: number | null; tier: keyof typeof SCREEN.rehabPpsf } {
+export function rehabEstimate(p: PropertyRecord, distress: number): { value: number | null; tier: keyof typeof SCREEN.rehabPpsf; fromWalkthrough?: boolean } {
+  if (p.rehabBudget) {
+    const per = has(p.sqft) && p.sqft > 0 ? p.rehabBudget.value / p.sqft : 0;
+    return { value: p.rehabBudget.value, tier: per >= 55 ? "heavy" : per >= 30 ? "medium" : "light", fromWalkthrough: true };
+  }
   const tier = distress >= 50 ? "heavy" : distress >= 25 ? "medium" : "light";
   return { value: has(p.sqft) ? Math.round(p.sqft * SCREEN.rehabPpsf[tier]) : null, tier };
 }
@@ -805,7 +864,7 @@ export interface Intel {
   engines: Record<EngineKey, EngineResult>;
   value: ValueEstimate;
   comps: CompSet | null;
-  rehab: { value: number | null; tier: "light" | "medium" | "heavy" };
+  rehab: { value: number | null; tier: "light" | "medium" | "heavy"; fromWalkthrough?: boolean };
   score: number;
   confidence: number;
   conclusions: Conclusion[];
@@ -821,9 +880,9 @@ export interface Intel {
   primarySignal: string;
 }
 
-export function analyze(p: PropertyRecord, market: Record<string, MarketContext>, now: Date, index: CompIndex | null = null): Intel {
+export function analyze(p: PropertyRecord, market: Record<string, MarketContext>, now: Date, index: CompIndex | null = null, presetComps: CompSet | null = null): Intel {
   const m = (p.zip && market[p.zip]) || (p.neighborhood && market[p.neighborhood]) || undefined;
-  const comps = index ? findComps(p, index, now) : null;
+  const comps = index ? findComps(p, index, now) : presetComps;
   const v = estimateValue(p, m, now, comps);
   const engines: Record<EngineKey, EngineResult> = {
     distress: distressEngine(p, now),

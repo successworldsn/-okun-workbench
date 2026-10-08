@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { logActivity, loadIntelData, saveBuyers, getBuyers, putContract, getContracts } from "@/lib/re-desk-store";
 import type { Contract } from "@/lib/re-contract";
+import { putFieldworkText, addFieldPhoto, removeFieldPhoto } from "@/lib/re-desk-store";
+import type { Fieldwork, Photo } from "@/lib/re-field";
 import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
 import { STAGES, nextAction, type ActivityKind, type Outcome, type Stage, type DeskState } from "@/lib/re-desk";
 import { analyze } from "@/lib/re-intel";
@@ -117,4 +119,19 @@ export async function saveContract(c: Contract, statusChanged: boolean): Promise
   }
   revalidatePath("/realestate/command");
   return { contracts: await getContracts(), state };
+}
+
+export async function saveFieldwork(fw: Pick<Fieldwork, "parcelId" | "scope" | "walkedAt" | "convos">): Promise<Fieldwork> {
+  const out = await putFieldworkText({ ...fw, convos: fw.convos.map((c) => ({ ...c, notes: c.notes?.slice(0, 4000) })) });
+  revalidatePath("/realestate/command");
+  return out;
+}
+
+export async function addPhoto(parcelId: string, photo: Photo): Promise<Fieldwork> {
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(photo.dataUrl) || photo.dataUrl.length > 900_000) throw new Error("Photo must be a resized image under ~650 KB.");
+  return addFieldPhoto(parcelId, { ...photo, room: photo.room.slice(0, 40), caption: photo.caption?.slice(0, 200) });
+}
+
+export async function deletePhoto(parcelId: string, photoId: string): Promise<Fieldwork> {
+  return removeFieldPhoto(parcelId, photoId);
 }

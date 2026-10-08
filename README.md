@@ -146,6 +146,25 @@ assignment agreement, buyer EMD…). Starting, closing (records the fee as close
 $) or cancelling moves the pipeline stage. Properties under contract leave the
 calling queue. Stored in `re_contracts`.
 
+**Field work** (`lib/re-field.ts`):
+- **TALK tab** — a call guide (open → property → situation → numbers → next
+  step) and structured notes: who you spoke with, who lives there, condition
+  in their words (1–5 + issues), timeline, reasons, asking price, stated
+  payoff, behind on payments, other signers. Saving rescores the property on
+  the spot: an ASAP/30–90-day timeline and reasons raise motivation, "not
+  selling" sinks it, a stated payoff becomes the debt figure (flagged "confirm
+  with a payoff letter"), tenants and co-signers add risk, and the "owner's
+  intent" unknown closes. It also logs a reached call (ready sellers →
+  OPPORTUNITY; "not selling" snoozes 90 days).
+- **WALK tab** — photos (resized to ≤1024 px in the browser, up to 24 per
+  property) and a line-item scope of work: 15 trades × light / standard /
+  heavy with Atlanta rental-grade starting costs, quantities from the record,
+  a cost column for contractor bids, 4% permits and 12% contingency. The saved
+  total replaces the size-based rehab screen in strategies, buyer prices,
+  deal sheets and the offer, and closes the "interior condition" unknown.
+- Stored in `re_fieldwork` (photos as data URLs in v1; move them to Supabase
+  Storage before this holds hundreds of houses).
+
 **Today** (the desk's opening view): follow-ups due, new signals this week, the
 next Georgia foreclosure sale (first Tuesday; Wednesday when that is Jan 1 or
 Jul 4) with the properties noticed for it, probate in the last 90 days, the top

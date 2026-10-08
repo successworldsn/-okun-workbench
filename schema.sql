@@ -503,3 +503,13 @@ create table re_contracts (
   updated_at timestamptz not null default now()
 );
 alter table re_contracts enable row level security;
+
+-- Field work per property: walk-through scope, photos (resized JPEG data URLs
+-- in v1 — move to Supabase Storage before this holds hundreds of houses) and
+-- owner conversations. Shape lives in lib/re-field.ts.
+create table re_fieldwork (
+  parcel_id text primary key,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table re_fieldwork enable row level security;

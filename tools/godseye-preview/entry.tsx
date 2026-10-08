@@ -5,14 +5,16 @@ import { demoMarket, demoProperties } from "@/lib/re-intel-demo";
 import { DealDesk } from "@/components/realestate/DealDesk";
 import { embedTerrain } from "@/components/realestate/GodsEyeMap";
 // DealDesk imports @/app/realestate/actions; build.mjs aliases that path to this same shim file.
-import { registerIntel, loadLocal, loadBuyers, loadContracts } from "./shims/actions";
+import { registerIntel, loadLocal, loadBuyers, loadContracts, loadFieldwork } from "./shims/actions";
+import { applyFieldwork } from "@/lib/re-field";
 
 declare const __TERRAIN__: Parameters<typeof embedTerrain>[0];
 
 embedTerrain(__TERRAIN__);
 const now = new Date();
 const market = demoMarket(now);
-const intel = analyzeAll(demoProperties(now), market, now);
+const fieldwork = loadFieldwork();
+const intel = analyzeAll(demoProperties(now).map((p) => applyFieldwork(p, fieldwork[p.id])), market, now);
 registerIntel(intel);
 const local = loadLocal();
 
@@ -23,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
     initialActivity={local.activity}
     initialBuyers={loadBuyers()}
     initialContracts={loadContracts()}
+    initialFieldwork={fieldwork}
     meta={{
       example: true,
       generatedAt: now.toISOString(),

@@ -10,6 +10,7 @@ import { draftOutreach, planFor, COMPLIANCE, type Channel } from "@/lib/re-outre
 import { importBuyersCsv, type Buyer } from "@/lib/re-buyers";
 import { demoBuyers } from "@/lib/re-intel-demo";
 import type { Contract } from "@/lib/re-contract";
+import type { Fieldwork, Photo } from "@/lib/re-field";
 
 let registry = new Map<string, Intel>();
 export function registerIntel(all: Intel[]) {
@@ -116,4 +117,38 @@ export async function saveContract(c: Contract, statusChanged: boolean): Promise
     state = await logTouch({ parcelId: c.parcelId, kind: "stage", outcome: null, stage, amount: c.status === "closed" ? c.assignmentFee ?? null : null, note: c.status === "active" ? `Under contract at $${c.contractPrice.toLocaleString("en-US")}` : c.status === "closed" ? "Closed" : "Contract cancelled" });
   }
   return { contracts: list, state };
+}
+
+const FKEY = "godseye-preview-fieldwork-v1";
+export function loadFieldwork(): Record<string, Fieldwork> {
+  try {
+    const j = JSON.parse(localStorage.getItem(FKEY) ?? "null");
+    if (j && typeof j === "object") return j;
+  } catch {
+    /* storage unavailable */
+  }
+  return {};
+}
+function putFw(fw: Fieldwork): Fieldwork {
+  const all = loadFieldwork();
+  const next = { ...fw, updatedAt: new Date().toISOString() };
+  all[fw.parcelId] = next;
+  try {
+    localStorage.setItem(FKEY, JSON.stringify(all));
+  } catch {
+    throw new Error("This browser's storage is full: photos in the preview are limited to a few. The live app stores them server-side.");
+  }
+  return next;
+}
+const cur = (id: string): Fieldwork => loadFieldwork()[id] ?? { parcelId: id, scope: null, walkedAt: null, photos: [], convos: [], updatedAt: new Date().toISOString() };
+export async function saveFieldwork(fw: Pick<Fieldwork, "parcelId" | "scope" | "walkedAt" | "convos">): Promise<Fieldwork> {
+  return putFw({ ...cur(fw.parcelId), scope: fw.scope, walkedAt: fw.walkedAt, convos: fw.convos });
+}
+export async function addPhoto(parcelId: string, photo: Photo): Promise<Fieldwork> {
+  const c = cur(parcelId);
+  return putFw({ ...c, photos: [...c.photos, photo].slice(-24) });
+}
+export async function deletePhoto(parcelId: string, photoId: string): Promise<Fieldwork> {
+  const c = cur(parcelId);
+  return putFw({ ...c, photos: c.photos.filter((x) => x.id !== photoId) });
 }

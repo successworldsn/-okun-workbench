@@ -78,6 +78,10 @@ export function buildOffer(i: Intel, matches: BuyerMatch[], s: OfferSettings = D
     );
   }
 
+  const ask = i.p.fieldNotes?.askingPrice ?? null;
+  if (ask != null)
+    lines.push({ label: "Owner's asking price", value: ask, basis: walkAway != null ? (ask > walkAway ? `${money(ask - walkAway)} above your walk-away` : `${money(walkAway - ask)} under your walk-away: room to meet them`) : `stated ${i.p.fieldNotes!.at.slice(0, 10)}` });
+
   // Seller side: what must they clear to sell at all?
   const value = i.value.current;
   const debt = i.value.debt;

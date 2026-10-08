@@ -59,7 +59,7 @@ const money = (v: number) => "$" + Math.round(v).toLocaleString("en-US");
 export function buyerPrice(i: Intel, b: Buyer): { price: number | null; basis: string } {
   const flipper = b.strategies.some((s) => s === "flip" || s === "wholesale" || s === "brrrr");
   if (flipper && i.value.arv != null && i.rehab.value != null)
-    return { price: Math.max(0, Math.round(i.value.arv * 0.7 - i.rehab.value)), basis: `ARV ${money(i.value.arv)} × 70% − ${i.rehab.tier} rehab ${money(i.rehab.value)}` };
+    return { price: Math.max(0, Math.round(i.value.arv * 0.7 - i.rehab.value)), basis: `ARV ${money(i.value.arv)} × 70% − ${i.rehab.fromWalkthrough ? "walk-through" : i.rehab.tier} rehab ${money(i.rehab.value)}` };
   if (b.strategies.some((s) => s === "development" || s === "land") && i.p.landValue != null)
     return { price: i.p.landValue, basis: "County land value" };
   if (i.value.current != null) return { price: i.value.current, basis: "Estimated as-is value" };
@@ -139,7 +139,7 @@ export function dealSheet(i: Intel, m: BuyerMatch | null): string {
     "",
     `Price: [your price]${m?.price != null ? `  (your numbers support up to ~${money(m.price)}: ${m.priceBasis})` : ""}`,
     i.value.arv != null ? `ARV: ${money(i.value.arv)} (${i.value.arvBasis})` : "ARV: [confirm]",
-    i.rehab.value != null ? `Rehab estimate: ${money(i.rehab.value)} (${i.rehab.tier} scope, screen only — walk it)` : "Rehab: [walk-through]",
+    i.rehab.value != null ? `Rehab estimate: ${money(i.rehab.value)} (${i.rehab.fromWalkthrough ? "line-item scope from our walk-through" : `${i.rehab.tier} scope, screen only — walk it`})` : "Rehab: [walk-through]",
     best ? `Best exit: ${best.key.replace("_", " ")} — ${best.economics}` : "",
     comps.length ? `Renovated comps:\n${comps.map((c) => `  • ${c.address} — ${money(c.price)} (${money(c.ppsf)}/sq ft), ${c.miles} mi, ${c.saleDate.slice(0, 10)}`).join("\n")}` : "",
     "",

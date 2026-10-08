@@ -8,7 +8,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { MISSIONS, SOURCES, STRATEGY_LABELS, badge, chooseRent, type Badge, type Evidence, type Intel, type MarketContext, type Mission } from "@/lib/re-intel";
+import { MISSIONS, SOURCES, STRATEGY_LABELS, TIMELINE_LABELS, analyze, badge, chooseRent, type FieldNotes, type Badge, type Evidence, type Intel, type MarketContext, type Mission } from "@/lib/re-intel";
 import {
   STAGES,
   ACTION_LABELS,
@@ -28,7 +28,8 @@ import {
 } from "@/lib/re-desk";
 import type { FeedSource } from "@/lib/re-desk-store";
 import type { Channel } from "@/lib/re-outreach";
-import { askOracle, draftMessage, logTouch, saveBuyer, importBuyers, saveContract } from "@/app/realestate/actions";
+import { askOracle, draftMessage, logTouch, saveBuyer, importBuyers, saveContract, saveFieldwork, addPhoto, deletePhoto } from "@/app/realestate/actions";
+import { CATALOG, GUIDE, ISSUES, REASONS, applyFieldwork, blankNotes, blankScope, computeScope, type Fieldwork, type Level, type Photo, type ScopeLine } from "@/lib/re-field";
 import { buildOffer, offerLetter, DEFAULT_OFFER, type OfferSettings } from "@/lib/re-offer";
 import { newContract, deadlines, progress, upcomingDeadlines, type Contract, type Severity } from "@/lib/re-contract";
 import { matchBuyers, dealSheet, PROP_TYPE_LABELS, BUYER_STRATEGIES, type Buyer, type BuyerMatch, type PropType } from "@/lib/re-buyers";
@@ -37,8 +38,8 @@ import type { Basemap, MapPoint } from "./GodsEyeMap";
 const GodsEyeMap = dynamic(() => import("./GodsEyeMap").then((m) => m.GodsEyeMap), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center font-mono text-xs text-cyan">ACQUIRING ORBIT…</div> });
 
 type View = "today" | "desk" | "pipeline" | "buyers" | "money" | "sources";
-type Tab = "OWNER" | "PROPERTY" | "MONEY" | "OFFER" | "ZONING" | "COMPS" | "CONTACT" | "BUYERS" | "CONTRACT" | "ACTION";
-const TABS: Tab[] = ["OWNER", "PROPERTY", "MONEY", "OFFER", "ZONING", "COMPS", "CONTACT", "BUYERS", "CONTRACT", "ACTION"];
+type Tab = "OWNER" | "PROPERTY" | "TALK" | "WALK" | "MONEY" | "OFFER" | "ZONING" | "COMPS" | "CONTACT" | "BUYERS" | "CONTRACT" | "ACTION";
+const TABS: Tab[] = ["ACTION", "TALK", "WALK", "OFFER", "BUYERS", "CONTRACT", "OWNER", "PROPERTY", "MONEY", "ZONING", "COMPS", "CONTACT"];
 const SEV_CLS: Record<Severity, string> = { done: "text-status-green", overdue: "text-status-red", red: "text-status-red", amber: "text-status-amber", ok: "text-ash" };
 const OFFER_KEY = "godseye-offer-settings-v1";
 
@@ -96,11 +97,12 @@ const missionFocus = (i: Intel, m: Mission | "all") =>
 const PRIMARY_ICON: Record<string, string> = { FORECLOSURE: "🔥", PROBATE: "🔥", "TAX DELINQUENT": "🔥", DEVELOPMENT: "🏗", "HIGH EQUITY": "💰", "CODE COMPLAINT": "🏚", ABSENTEE: "🏠", RESEARCH: "◎" };
 
 export function DealDesk({
-  intel,
+  intel: intelIn,
   initialStates,
   initialActivity,
   initialBuyers,
   initialContracts,
+  initialFieldwork,
   meta,
   market,
   nowIso,
@@ -112,6 +114,7 @@ export function DealDesk({
   initialActivity: Activity[];
   initialBuyers: Buyer[];
   initialContracts: Contract[];
+  initialFieldwork: Record<string, Fieldwork>;
   meta: { example: boolean; generatedAt: string; sources: FeedSource[]; note?: string };
   market: Record<string, MarketContext>;
   nowIso: string;
@@ -120,6 +123,16 @@ export function DealDesk({
 }) {
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const [states, setStates] = useState(initialStates);
+  const [fieldwork, setFieldwork] = useState(initialFieldwork);
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
+  // Field work saved this session re-scores that property on the spot (comps reused from the server's pass).
+  const intel = useMemo(
+    () =>
+      (dirty.size ? intelIn.map((i) => (dirty.has(i.p.id) ? analyze(applyFieldwork({ ...i.p, rehabBudget: null, fieldNotes: null }, fieldwork[i.p.id]), market, now, null, i.comps) : i)) : [...intelIn]).sort(
+        (a, b) => b.score - a.score || b.confidence - a.confidence,
+      ),
+    [intelIn, dirty, fieldwork, market, now],
+  );
   const [activity, setActivity] = useState(initialActivity);
   const [buyers, setBuyers] = useState(initialBuyers);
   const [contracts, setContracts] = useState(initialContracts);
@@ -255,6 +268,20 @@ export function DealDesk({
     });
   }
 
+  function persistField(fw: Fieldwork, action: () => Promise<Fieldwork>, msg: string) {
+    setFieldwork((f) => ({ ...f, [fw.parcelId]: fw }));
+    setDirty((d) => new Set(d).add(fw.parcelId));
+    start(async () => {
+      try {
+        const saved = await action();
+        setFieldwork((f) => ({ ...f, [fw.parcelId]: saved }));
+        flash(msg);
+      } catch (e) {
+        flash(`Not saved: ${(e as Error).message}`);
+      }
+    });
+  }
+
   // ─── Header ───
   const header = (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-cyan/20 bg-[#03060D]/95 px-3 font-mono text-[11px] tracking-widest text-ash">
@@ -347,6 +374,8 @@ export function DealDesk({
       i={sel}
       buyerMatch={buyerMatches.get(sel.p.id) ?? { matches: [], nearMisses: [] }}
       contract={contractFor.get(sel.p.id) ?? null}
+      fieldwork={fieldwork[sel.p.id] ?? { parcelId: sel.p.id, scope: null, walkedAt: null, photos: [], convos: [], updatedAt: nowIso }}
+      onField={persistField}
       onContract={persistContract}
       offerSettings={offerSettings}
       setOfferSettings={setOfferSettings}
@@ -494,6 +523,8 @@ function Dossier(props: {
   i: Intel;
   buyerMatch: { matches: BuyerMatch[]; nearMisses: BuyerMatch[] };
   contract: Contract | null;
+  fieldwork: Fieldwork;
+  onField: (fw: Fieldwork, action: () => Promise<Fieldwork>, msg: string) => void;
   onContract: (c: Contract, statusChanged: boolean) => void;
   offerSettings: OfferSettings;
   setOfferSettings: (o: OfferSettings) => void;
@@ -801,6 +832,32 @@ function Dossier(props: {
               )}
               <ContactLog acts={props.acts} />
             </>
+          )}
+          {tab === "TALK" && (
+            <TalkPanel
+              fw={props.fieldwork}
+              now={now}
+              onSave={(n) => {
+                const fw = { ...props.fieldwork, convos: [n, ...props.fieldwork.convos] };
+                props.onField(fw, () => saveFieldwork({ parcelId: fw.parcelId, scope: fw.scope, walkedAt: fw.walkedAt, convos: fw.convos }), "Conversation saved · score updated");
+                // A logged conversation is a reached call: ready-to-sell owners move to OPPORTUNITY, "not selling" snoozes 90 days.
+                const outcome = n.timeline === "not_selling" ? "not_interested" : n.timeline === "asap" || n.timeline === "30_90" ? "interested" : "reached";
+                props.onTouch("call", outcome, { advance: false, note: `Talked with ${n.spokeWith}: ${TIMELINE_LABELS[n.timeline].toLowerCase()}${n.askingPrice ? `, asking $${n.askingPrice.toLocaleString("en-US")}` : ""}` });
+              }}
+            />
+          )}
+          {tab === "WALK" && (
+            <WalkPanel
+              i={i}
+              fw={props.fieldwork}
+              now={now}
+              onSaveScope={(scope) => {
+                const fw = { ...props.fieldwork, scope, walkedAt: scope ? new Date().toISOString() : null };
+                props.onField(fw, () => saveFieldwork({ parcelId: fw.parcelId, scope: fw.scope, walkedAt: fw.walkedAt, convos: fw.convos }), scope ? "Walk-through saved · rehab, offer and buyer prices updated" : "Scope cleared");
+              }}
+              onAddPhoto={(ph) => props.onField({ ...props.fieldwork, photos: [...props.fieldwork.photos, ph] }, () => addPhoto(props.fieldwork.parcelId, ph), "Photo saved")}
+              onDeletePhoto={(id) => props.onField({ ...props.fieldwork, photos: props.fieldwork.photos.filter((x) => x.id !== id) }, () => deletePhoto(props.fieldwork.parcelId, id), "Photo removed")}
+            />
           )}
           {tab === "OFFER" && (
             <>
@@ -1280,6 +1337,292 @@ function BuyersView({ buyers, counts, pending, onSave, onImport }: { buyers: Buy
       <button disabled={!csv.trim() || pending} onClick={() => { onImport(csv); setCsv(""); }} className="mt-1 rounded bg-cyan/15 px-3 py-1 font-mono text-[10px] tracking-widest text-cyan hover:bg-cyan/25 disabled:opacity-40">
         IMPORT BUYERS
       </button>
+    </div>
+  );
+}
+
+const ROOMS = ["Exterior", "Roof", "Kitchen", "Bath", "Living", "Bedroom", "Basement / crawl", "HVAC", "Electrical", "Plumbing", "Other"];
+
+/** Resize to ≤1024 px JPEG so a photo is ~100–250 KB. */
+async function resizePhoto(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => rej(new Error("Not an image the browser can read"));
+      im.src = url;
+    });
+    const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k);
+    c.height = Math.round(img.height * k);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.72);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function WalkPanel({ i, fw, now, onSaveScope, onAddPhoto, onDeletePhoto }: { i: Intel; fw: Fieldwork; now: Date; onSaveScope: (s: ScopeLine[] | null) => void; onAddPhoto: (p: Photo) => void; onDeletePhoto: (id: string) => void }) {
+  const [room, setRoom] = useState("Exterior");
+  const [lines, setLines] = useState<ScopeLine[]>(() => fw.scope ?? blankScope(i.p));
+  const [err, setErr] = useState<string | null>(null);
+  const sc = computeScope(lines);
+  const setLine = (k: string, patch: Partial<ScopeLine>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
+  const screen = i.rehab.fromWalkthrough ? null : i.rehab.value;
+  return (
+    <div>
+      <div className="font-mono text-[9px] tracking-[0.25em] text-muted">PHOTOS · {fw.photos.length}</div>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+        <select id="wk-room" value={room} onChange={(e) => setRoom(e.target.value)} className="rounded border border-elevated bg-[#02040A] px-2 py-1 text-bone">
+          {ROOMS.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
+        </select>
+        <label className="cursor-pointer rounded border border-cyan/30 px-2 py-1 font-mono text-[10px] tracking-wider text-cyan hover:bg-cyan/10">
+          + ADD PHOTOS
+          <input
+            id="wk-photos"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              setErr(null);
+              for (const f of Array.from(e.target.files ?? [])) {
+                try {
+                  onAddPhoto({ id: `ph-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, dataUrl: await resizePhoto(f), room, takenAt: new Date().toISOString() });
+                } catch (x) {
+                  setErr((x as Error).message);
+                }
+              }
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {err && <span className="text-status-red">{err}</span>}
+      </div>
+      {fw.photos.length > 0 && (
+        <div className="mt-2 grid grid-cols-3 gap-1">
+          {fw.photos.map((ph) => (
+            <figure key={ph.id} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ph.dataUrl} alt={`${ph.room} photo`} className="aspect-square w-full rounded object-cover" />
+              <figcaption className="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-[#02040A]/80 px-1 font-mono text-[9px] text-bone">
+                {ph.room}
+                <button onClick={() => onDeletePhoto(ph.id)} className="text-status-red" aria-label="Remove photo">
+                  ✕
+                </button>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      <div className="mt-4 flex items-baseline gap-2">
+        <span className="font-mono text-[9px] tracking-[0.25em] text-muted">SCOPE OF WORK</span>
+        {fw.walkedAt && <span className="font-mono text-[9px] text-status-green">saved {fw.walkedAt.slice(0, 10)}</span>}
+      </div>
+      <table className="mt-1 w-full text-[11px]">
+        <tbody>
+          {sc.rows.map((r) => {
+            const item = CATALOG.find((c) => c.key === r.key)!;
+            return (
+              <tr key={r.key} className="border-b border-elevated/60 align-middle">
+                <td className="py-1 pr-1 text-bone" title={item.hint}>
+                  {r.label}
+                </td>
+                <td className="pr-1">
+                  <select id={`wk-l-${r.key}`} value={r.level} onChange={(e) => setLine(r.key, { level: e.target.value as Level })} className={`w-full rounded border border-elevated bg-[#02040A] px-1 py-0.5 text-[11px] ${r.level === "none" ? "text-muted" : "text-bone"}`}>
+                    <option value="none">—</option>
+                    <option value="light">light</option>
+                    <option value="standard">standard</option>
+                    <option value="heavy">heavy</option>
+                  </select>
+                </td>
+                <td className="w-16 pr-1">
+                  <input id={`wk-q-${r.key}`} inputMode="decimal" value={r.qty} onChange={(e) => setLine(r.key, { qty: Number(e.target.value) || 0 })} className="w-full rounded border border-elevated bg-[#02040A] px-1 py-0.5 text-right font-mono text-[11px] text-bone" aria-label={`${r.label} quantity (${r.unit})`} />
+                </td>
+                <td className="w-16 pr-1">
+                  <input
+                    id={`wk-u-${r.key}`}
+                    inputMode="decimal"
+                    placeholder={r.level === "none" ? "" : String(r.unitPrice)}
+                    value={r.unitCost ?? ""}
+                    onChange={(e) => setLine(r.key, { unitCost: e.target.value === "" ? null : Number(e.target.value.replace(/[$,]/g, "")) || 0 })}
+                    className="w-full rounded border border-elevated bg-[#02040A] px-1 py-0.5 text-right font-mono text-[11px] text-bone placeholder:text-muted"
+                    aria-label={`${r.label} cost per ${r.unit} (bid)`}
+                  />
+                </td>
+                <td className="w-16 text-right font-mono text-bone">{r.cost ? kmoney(r.cost) : ""}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <Rows
+        rows={[
+          ["Hard costs", money(sc.hard)],
+          ["Permits (4%)", money(sc.permits)],
+          ["Contingency (12%)", money(sc.contingency)],
+          ["Rehab budget (total)", money(sc.total)],
+          ...(screen != null ? ([["Size-based screen it replaces", money(screen)]] as [string, string][]) : []),
+        ]}
+        foot="Quantity column: sq ft, count or 1 for lump sums. Cost column overrides the starting unit cost with your contractor's bid. Saving replaces the rehab estimate in the offer, buyer prices and strategies."
+      />
+      <div className="mt-2 flex gap-1 font-mono text-[10px] tracking-wider">
+        <button disabled={sc.total === 0} onClick={() => onSaveScope(lines)} className="rounded bg-gold/20 px-3 py-1 text-gold hover:bg-gold/30 disabled:opacity-40">
+          SAVE WALK-THROUGH · {kmoney(sc.total)}
+        </button>
+        {fw.scope && (
+          <button onClick={() => { setLines(blankScope(i.p)); onSaveScope(null); }} className="rounded border border-elevated px-3 py-1 text-ash">
+            CLEAR
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-[10px] text-muted">Starting costs are Atlanta-area rental-grade estimates as of {now.getFullYear()}, not quotes.</p>
+    </div>
+  );
+}
+
+function TalkPanel({ fw, now, onSave }: { fw: Fieldwork; now: Date; onSave: (n: FieldNotes) => void }) {
+  const [n, setN] = useState<FieldNotes>(() => blankNotes(now));
+  const chip = (on: boolean) => `rounded border px-2 py-0.5 text-[10px] ${on ? "border-cyan bg-cyan/15 text-cyan" : "border-elevated text-ash"}`;
+  const sel = "w-full rounded border border-elevated bg-[#02040A] px-2 py-1 text-[11px] text-bone";
+  const tri = (v: boolean | null) => (v == null ? "" : v ? "yes" : "no");
+  const fromTri = (v: string) => (v === "" ? null : v === "yes");
+  const last = fw.convos[0];
+  return (
+    <div>
+      <details className="rounded border border-cyan/20 p-2">
+        <summary className="cursor-pointer font-mono text-[10px] tracking-wider text-cyan">CALL GUIDE (ASK IN THIS ORDER)</summary>
+        <ol className="mt-1 space-y-1">
+          {GUIDE.map((g) => (
+            <li key={g.stage} className="text-[11px]">
+              <span className="font-mono text-[9px] tracking-wider text-gold">{g.stage.toUpperCase()}</span>
+              <ul className="ml-3 list-disc text-ash">
+                {g.asks.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-1 text-[10px] text-muted">Listen more than you talk. Write down their words, not your guess.</p>
+      </details>
+      <form
+        className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave({ ...n, at: new Date().toISOString() });
+          setN(blankNotes(now));
+        }}
+      >
+        <label>
+          Spoke with
+          <select id="tk-who" value={n.spokeWith} onChange={(e) => setN({ ...n, spokeWith: e.target.value as FieldNotes["spokeWith"] })} className={sel}>
+            {["owner", "heir", "tenant", "agent", "other"].map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Who lives there
+          <select id="tk-occ" value={n.occupancy} onChange={(e) => setN({ ...n, occupancy: e.target.value as FieldNotes["occupancy"] })} className={sel}>
+            {["unknown", "owner", "tenant", "vacant"].map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
+        <div className="col-span-2">
+          Condition, their words (1 = needs everything · 5 = move-in ready)
+          <div className="mt-1 flex gap-1">
+            {[1, 2, 3, 4, 5].map((c) => (
+              <button type="button" key={c} onClick={() => setN({ ...n, condition: n.condition === c ? null : (c as FieldNotes["condition"]) })} className={chip(n.condition === c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {ISSUES.map((x) => (
+              <button type="button" key={x} onClick={() => setN({ ...n, issues: n.issues.includes(x) ? n.issues.filter((y) => y !== x) : [...n.issues, x] })} className={chip(n.issues.includes(x))}>
+                {x}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label>
+          Timeline
+          <select id="tk-time" value={n.timeline} onChange={(e) => setN({ ...n, timeline: e.target.value as FieldNotes["timeline"] })} className={sel}>
+            {(Object.keys(TIMELINE_LABELS) as FieldNotes["timeline"][]).map((k) => (
+              <option key={k} value={k}>
+                {TIMELINE_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Asking price $
+          <input id="tk-ask" inputMode="decimal" value={n.askingPrice ?? ""} onChange={(e) => setN({ ...n, askingPrice: e.target.value ? Number(e.target.value.replace(/[$,\s]/g, "")) || null : null })} className={`${sel} font-mono`} />
+        </label>
+        <div className="col-span-2">
+          Why sell
+          <div className="mt-1 flex flex-wrap gap-1">
+            {REASONS.map((x) => (
+              <button type="button" key={x} onClick={() => setN({ ...n, reasons: n.reasons.includes(x) ? n.reasons.filter((y) => y !== x) : [...n.reasons, x] })} className={chip(n.reasons.includes(x))}>
+                {x}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label>
+          Mortgage payoff they stated $
+          <input id="tk-payoff" inputMode="decimal" value={n.statedPayoff ?? ""} onChange={(e) => setN({ ...n, statedPayoff: e.target.value === "" ? null : Number(e.target.value.replace(/[$,\s]/g, "")) || 0 })} className={`${sel} font-mono`} />
+        </label>
+        <label>
+          Behind on payments?
+          <select id="tk-behind" value={tri(n.behindOnPayments)} onChange={(e) => setN({ ...n, behindOnPayments: fromTri(e.target.value) })} className={sel}>
+            <option value="">didn&apos;t say</option>
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+          </select>
+        </label>
+        <label>
+          Others must sign?
+          <select id="tk-others" value={tri(n.otherDecisionMakers)} onChange={(e) => setN({ ...n, otherDecisionMakers: fromTri(e.target.value) })} className={sel}>
+            <option value="">didn&apos;t say</option>
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+          </select>
+        </label>
+        <label className="col-span-2">
+          Notes (their words)
+          <textarea id="tk-notes" rows={3} value={n.notes ?? ""} onChange={(e) => setN({ ...n, notes: e.target.value })} className={sel} />
+        </label>
+        <button className="col-span-2 rounded bg-gold/20 py-1.5 font-mono text-[10px] tracking-widest text-gold hover:bg-gold/30">SAVE CONVERSATION · RESCORE</button>
+      </form>
+      {last && (
+        <div className="mt-3">
+          <div className="font-mono text-[9px] tracking-[0.25em] text-muted">CONVERSATIONS · {fw.convos.length}</div>
+          <ol className="mt-1 space-y-1.5">
+            {fw.convos.map((c) => (
+              <li key={c.at} className="text-[11px]">
+                <span className="font-mono text-muted">{c.at.slice(0, 10)}</span> <span className="text-bone">{c.spokeWith}</span>
+                <span className="text-ash">
+                  {" "}
+                  · {TIMELINE_LABELS[c.timeline]}
+                  {c.condition ? ` · condition ${c.condition}/5` : ""}
+                  {c.askingPrice ? ` · asking ${money(c.askingPrice)}` : ""}
+                  {c.statedPayoff != null ? ` · owes ${money(c.statedPayoff)}` : ""}
+                  {c.reasons.length ? ` · ${c.reasons.join(", ")}` : ""}
+                </span>
+                {c.notes && <div className="ml-4 text-ash">“{c.notes}”</div>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }
