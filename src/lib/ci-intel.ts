@@ -133,7 +133,8 @@ export interface Site {
     utility?: string;
     onsiteGenerationMw?: number | null; // existing plant / interconnection rights
   };
-  fiber: { longHaulMi?: number | null; carriers?: number | null };
+  /** proxy: what longHaulMi actually measures when it isn't a carrier route (e.g. nearest interconnection facility). */
+  fiber: { longHaulMi?: number | null; carriers?: number | null; proxy?: string };
   water: { source?: "municipal" | "river" | "aquifer" | "reclaimed" | "unknown"; mgd?: number | null };
   floodZone?: string | null;
   incentives?: string[];
@@ -234,14 +235,15 @@ function fiberFactor(s: Site): Factor {
   const ev = s.evidence.fiber ? [s.evidence.fiber] : [];
   let score = 0;
   if (has(s.fiber.longHaulMi)) {
-    score = s.fiber.longHaulMi <= 1 ? 80 : s.fiber.longHaulMi <= 3 ? 60 : s.fiber.longHaulMi <= 10 ? 35 : 10;
-    f.push({ text: `${s.fiber.longHaulMi} mi to long-haul fiber`, evidence: ev });
+    score = s.fiber.longHaulMi <= 1 ? 80 : s.fiber.longHaulMi <= 3 ? 60 : s.fiber.longHaulMi <= 10 ? 35 : s.fiber.longHaulMi <= 30 ? 20 : 10;
+    if (s.fiber.proxy) score = Math.min(score, 60); // a proxy never reads as a confirmed route
+    f.push({ text: `${s.fiber.longHaulMi} mi to ${s.fiber.proxy ?? "long-haul fiber"}`, evidence: ev });
   }
   if (has(s.fiber.carriers) && s.fiber.carriers >= 2) {
     score += 20;
     f.push({ text: `${s.fiber.carriers} carriers nearby (diverse paths)`, evidence: ev });
   }
-  return { key: "fiber", score: clamp(score), findings: f, unknowns: has(s.fiber.longHaulMi) ? [] : ["Fiber route distance"] };
+  return { key: "fiber", score: clamp(score), findings: f, unknowns: has(s.fiber.longHaulMi) && !s.fiber.proxy ? [] : ["Fiber route distance"] };
 }
 
 function landFactor(s: Site): Factor {
@@ -505,7 +507,7 @@ export function analyzeSite(s: Site, signals: Signal[], capital: CapitalSource[]
 }
 
 export function analyzeSites(sites: Site[], signals: Signal[], capital: CapitalSource[], now: Date): SiteIntel[] {
-  return sites.map((s) => analyzeSite(s, signals, capital, now)).sort((a, b) => b.score - a.score || b.confidence - a.confidence);
+  return sites.map((s) => analyzeSite(s, signals, capital, now)).sort((a, b) => b.score - a.score || b.confidence - a.confidence || (deliverableMw(b.site).mw ?? 0) - (deliverableMw(a.site).mw ?? 0));
 }
 
 /** Layer counts for the command bar (POWER ███ 87 …). */

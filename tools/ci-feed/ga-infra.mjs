@@ -199,6 +199,49 @@ for (const s of subs.filter((x) => x.kv >= 230)) {
   });
 }
 
+// ─── enrich: FEMA flood zone at each node, nearest interconnection facility ───
+const FEMA = process.env.FEMA_URL || "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28";
+async function pool(items, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) await fn(items[i++]); }));
+}
+let floodHits = 0, floodFail = 0;
+await pool(sites, 6, async (s) => {
+  try {
+    const j = await getJson(`${FEMA}/query`, { geometry: `${s.lng},${s.lat}`, geometryType: "esriGeometryPoint", inSR: "4326", spatialRel: "esriSpatialRelIntersects", outFields: "FLD_ZONE,ZONE_SUBTY", returnGeometry: "false" });
+    const a = j.features?.[0]?.attributes;
+    if (a?.FLD_ZONE) {
+      s.floodZone = String(a.FLD_ZONE);
+      s.evidence.flood = ev("fema", `Zone ${a.FLD_ZONE}${a.ZONE_SUBTY ? ` (${String(a.ZONE_SUBTY).toLowerCase()})` : ""} at the node point`);
+      floodHits++;
+    }
+  } catch {
+    floodFail++;
+  }
+});
+console.log(`FEMA: ${floodHits} nodes inside a mapped zone, ${floodFail} lookups failed`);
+sources.push({ id: "fema", label: "FEMA National Flood Hazard Layer (zone at node point)", url: FEMA, records: floodHits, pulledAt });
+
+// PeeringDB: where networks actually interconnect (carrier hotels, data centers). Distance to the
+// nearest one is a fiber PROXY, labeled as such; it is not a carrier route.
+let facs = [];
+try {
+  const r = await fetch(`https://www.peeringdb.com/api/fac?country=US&state__in=${STATE},${STATE_NAMES[STATE]}`, { headers: { "user-agent": "godseye-ga-infra/1.0" }, signal: AbortSignal.timeout(60_000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  facs = ((await r.json()).data ?? []).filter((f) => isFinite(Number(f.latitude)) && isFinite(Number(f.longitude)) && f.latitude != null).map((f) => ({ name: f.name, city: f.city, lat: Number(f.latitude), lng: Number(f.longitude), nets: f.net_count ?? 0 }));
+} catch (e) {
+  console.log(`PeeringDB unavailable (${e.message}); fiber stays unknown.`);
+}
+if (facs.length) {
+  for (const s of sites) {
+    const near = facs.reduce((b, f) => { const d = miles(s, f); return d < b.d ? { d, f } : b; }, { d: Infinity, f: null });
+    s.fiber = { longHaulMi: Math.round(near.d * 10) / 10, proxy: "an interconnection facility (fiber proxy)" };
+    s.evidence.fiber = { source: "estimate", detail: `Nearest: ${near.f.name}, ${near.f.city} (${near.f.nets} networks) per PeeringDB; proxy for fiber, not a route`, observedAt: pulledAt.slice(0, 10) };
+  }
+  sources.push({ id: "peeringdb", label: `PeeringDB interconnection facilities in ${STATE} (fiber proxy)`, url: "https://www.peeringdb.com/api/fac", records: facs.length, pulledAt });
+}
+console.log(`PeeringDB: ${facs.length} facilities`);
+
 if (!sites.length) {
   console.error(`No power nodes built (${plantF.length} plants, ${subF.length} substations); keeping the previous file.`);
   if (plantF[0]) console.error("plant fields:", Object.keys(plantF[0].attributes).join(", "));
