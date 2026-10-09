@@ -45,21 +45,18 @@
     c.addEventListener("pointermove", function (e) { var r = c.getBoundingClientRect(); c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px"); });
   });
 
-  /* embers in heroes */
-  $$(".embers").forEach(function (box) {
-    if (reduce) return;
-    for (var i = 0; i < 18; i++) {
-      var s = document.createElement("i");
-      s.style.left = (Math.random() * 100) + "%";
-      s.style.animationDuration = (9 + Math.random() * 12) + "s";
-      s.style.animationDelay = (-Math.random() * 20) + "s";
-      var z = 2 + Math.random() * 3; s.style.width = s.style.height = z + "px";
-      box.appendChild(s);
-    }
+  /* media: a photo or film that hasn't arrived leaves its frame's art showing, never a broken icon */
+  $$(".frame img, .film-bg img").forEach(function (img) {
+    var gone = function () { img.remove(); };
+    img.addEventListener("error", gone);
+    // an eager image may have failed before this script ran (a lazy one simply hasn't started)
+    if (img.loading !== "lazy" && img.complete && img.naturalWidth === 0) gone();
   });
-
-  /* marquee: duplicate content for a seamless loop */
-  $$(".marquee-track").forEach(function (t) { t.innerHTML += t.innerHTML; });
+  $$("video[data-film]").forEach(function (v) {
+    var srcs = $$("source", v), failed = 0;
+    srcs.forEach(function (s) { s.addEventListener("error", function () { if (++failed === srcs.length) v.remove(); }); });
+    if (reduce) { v.removeAttribute("autoplay"); v.pause && v.pause(); }
+  });
 
   /* footer year + design credit + socials */
   $$("[data-year]").forEach(function (el) { el.textContent = new Date().getFullYear(); });

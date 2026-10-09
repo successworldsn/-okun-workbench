@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/council.css">
 <script src="assets/config.js" defer></script>
 <script src="assets/site.js" defer></script>
 <!--/@head-->
@@ -49,10 +50,9 @@
 <!--/@header-->
 
 <main id="main">
-  <section class="page-hero">
-    <img class="watermark" src="assets/img/logo-720.webp" alt="" width="520" height="520">
-    <div class="embers" aria-hidden="true"></div>
+  <section class="page-hero with-frame">
     <div class="wrap">
+      <div>
       <nav class="crumbs reveal" aria-label="Breadcrumb"><a href="index.html">Home</a><span>/</span><span>Preserve a Story</span></nav>
       <h1 class="h1 reveal">Their voice. Their story. <em>Kept for generations.</em></h1>
       <p class="lead reveal">We sit with your loved one, listen, and turn their story into a keepsake book or a cinematic short film your family will treasure long after.</p>
@@ -60,6 +60,8 @@
         <a class="btn btn-gold" href="#packages">See the packages <span class="arr">↗</span></a>
         <a class="btn" href="#book">Ask a question <span class="arr">↗</span></a>
       </div>
+      </div>
+      <figure class="frame  art-film  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/></svg></div><img src="assets/media/film.webp" srcset="assets/media/film-sm.webp 800w, assets/media/film.webp 1376w" sizes="(max-width:900px) 100vw, 40vw" alt="A camera set up facing an empty armchair by a window" loading="lazy" decoding="async"><figcaption class="slate"><span>Preserve a Story</span><span>Book + film</span></figcaption></figure>
     </div>
   </section>
 
@@ -78,7 +80,7 @@
         <h2 class="h2 reveal">Choose how their story <em>lives on.</em></h2>
       </div>
       <div class="grid g3" style="margin-top:56px;align-items:stretch">
-        <article class="card tier reveal">
+        <article class="card tier mat-paper reveal">
           <span class="tag" style="align-self:flex-start">Keepsake</span>
           <h3 class="h3" style="margin-top:20px">The Keepsake Book</h3>
           <div class="price">from $295</div><span class="per">one-time</span>
@@ -88,10 +90,10 @@
             <li>Two printed copies + a digital copy</li>
             <li>Room for up to 10 family photos</li>
           </ul>
-          <a class="btn" href="#book" data-set="b-package=keepsake" data-scroll="#book">Request this package</a>
-          <a class="btn btn-gold" data-pay="legacyKeepsake" hidden>Pay now ↗</a>
+          <a class="btn" href="#book" data-set="b-package=keepsake" data-scroll="#book">Begin with this package</a>
+          <a class="btn btn-gold" data-pay="legacyKeepsake" hidden>Reserve now ↗</a>
         </article>
-        <article class="card tier featured reveal" style="--d:.1s">
+        <article class="card tier featured mat-obsidian mat-gold reveal" style="--d:.1s">
           <span class="tag badge">Most loved</span>
           <span class="tag" style="align-self:flex-start">Film</span>
           <h3 class="h3" style="margin-top:20px">The Lifetimes Film</h3>
@@ -102,10 +104,10 @@
             <li>The Keepsake Book included</li>
             <li>Private link to share with family</li>
           </ul>
-          <a class="btn btn-gold" href="#book" data-set="b-package=film" data-scroll="#book">Request this package</a>
-          <a class="btn btn-ruby" data-pay="legacyFilm" hidden>Pay now ↗</a>
+          <a class="btn btn-gold" href="#book" data-set="b-package=film" data-scroll="#book">Begin with this package</a>
+          <a class="btn btn-ruby" data-pay="legacyFilm" hidden>Reserve now ↗</a>
         </article>
-        <article class="card tier reveal" style="--d:.2s">
+        <article class="card tier mat-marble reveal" style="--d:.2s">
           <span class="tag" style="align-self:flex-start">Heirloom</span>
           <h3 class="h3" style="margin-top:20px">The Heirloom Collection</h3>
           <div class="price">from $2,400</div><span class="per">one-time</span>
@@ -115,8 +117,8 @@
             <li>Hardcover heirloom book, five copies</li>
             <li>A private family premiere screening</li>
           </ul>
-          <a class="btn" href="#book" data-set="b-package=heirloom" data-scroll="#book">Request this package</a>
-          <a class="btn btn-gold" data-pay="legacyHeirloom" hidden>Pay now ↗</a>
+          <a class="btn" href="#book" data-set="b-package=heirloom" data-scroll="#book">Begin with this package</a>
+          <a class="btn btn-gold" data-pay="legacyHeirloom" hidden>Reserve now ↗</a>
         </article>
       </div>
       <p class="small center price-note reveal">Prices are starting points; travel and extra copies can change the total. We confirm every quote in writing before anything is booked.</p>
@@ -139,7 +141,7 @@
         <h2 class="h2 reveal">Let's start with <em>a conversation.</em></h2>
         <p class="lead reveal">No payment is taken here. We'll reply to arrange a friendly call, answer your questions and confirm a quote.</p>
       </div>
-      <div class="form-card reveal">
+      <div class="form-card mat-marble reveal">
         <form class="form" data-form="legacy" data-subject="Preserve a Story request" data-success="Thank you. We've received your request and will reply to arrange a call." novalidate>
           <div class="field"><label for="b-package">Package</label>
             <select class="input" id="b-package" name="package">

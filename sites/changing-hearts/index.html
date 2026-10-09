@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/council.css">
 <script src="assets/config.js" defer></script>
 <script src="assets/site.js" defer></script>
 <!--/@head-->
@@ -57,32 +58,24 @@
 <!--/@header-->
 
 <main id="main">
-  <section class="hero">
-    <div class="rays" aria-hidden="true"></div>
-    <div class="embers" aria-hidden="true"></div>
-    <div class="wrap hero-grid">
-      <div>
-        <span class="eyebrow reveal">A little care changes everything</span>
-        <h1 class="display reveal" style="--d:.1s;margin-top:26px">Make someone's day feel <span class="gold-text"><em style="color:inherit">different.</em></span></h1>
-        <p class="lead reveal" style="--d:.2s;margin-top:28px">We bring thoughtful reading, warm welcomes and meaningful moments to care communities, made possible with local partners. Then we tell the stories those moments uncover.</p>
-        <div class="actions reveal" style="--d:.3s;margin-top:36px">
-          <a class="btn btn-gold" href="programs.html">See what we do <span class="arr">↗</span></a>
-          <a class="btn" href="partners.html">Make an impact <span class="arr">↗</span></a>
-        </div>
-      </div>
-      <div class="hero-art reveal" style="--d:.15s" aria-hidden="true">
-        <div class="halo"></div><div class="ring"></div><div class="ring r2"></div>
-        <img src="assets/img/logo-720.webp" width="560" height="560" alt="" fetchpriority="high">
+  <section class="hero film">
+    <div class="film-bg" aria-hidden="true">
+      <img src="assets/media/hero.webp" srcset="assets/media/hero-sm.webp 800w, assets/media/hero.webp 1376w" sizes="100vw" alt="" fetchpriority="high">
+      <video data-film autoplay muted loop playsinline preload="metadata" poster="assets/media/hero.webp"><source src="assets/media/hero-loop.webm" type="video/webm"><source src="assets/media/hero-loop.mp4" type="video/mp4"></video>
+    </div>
+    <div class="wrap">
+      <img class="seal reveal" src="assets/img/logo-360.webp" width="88" height="88" alt="">
+      <span class="eyebrow reveal">A little care changes everything</span>
+      <h1 class="display reveal" style="--d:.1s;margin-top:24px;max-width:820px">Make someone's day feel <em>different.</em></h1>
+      <p class="lead reveal" style="--d:.2s;margin-top:24px">We bring thoughtful reading, warm welcomes and meaningful moments to care communities, made possible with local partners. Then we tell the stories those moments uncover.</p>
+      <div class="actions reveal" style="--d:.3s;margin-top:32px">
+        <a class="btn btn-gold" href="programs.html">Enter the programs <span class="arr">↗</span></a>
+        <a class="btn" href="partners.html">Make an impact <span class="arr">↗</span></a>
       </div>
     </div>
-    <span class="scroll-cue" aria-hidden="true">Scroll</span>
   </section>
 
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <span>Small moments</span><span>✦</span><span>Lasting meaning</span><span>✦</span><span>Care</span><span>✦</span><span>Connection</span><span>✦</span><span>Community</span><span>✦</span><span>Every story matters</span><span>✦</span>
-    </div>
-  </div>
+  <div class="credo" aria-label="What we believe"><div class="wrap"><span>Small moments</span><span>Lasting meaning</span><span>Care</span><span>Connection</span><span>Community</span></div></div>
 
   <section class="section">
     <div class="wrap">
@@ -94,23 +87,23 @@
         <p class="lead reveal">Simple, thoughtful experiences designed to help people feel welcomed, connected and remembered, run end-to-end by our team.</p>
       </div>
       <div class="grid g3" style="margin-top:56px">
-        <article class="card reveal">
-          <span class="num">01 / READ</span>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/><path d="M12 6v13.5"/></svg></div>
+        <article class="card mat-obsidian reveal" style="padding-top:12px">
+          <figure class="frame r43 art-read "><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/><path d="M12 6v13.5"/></svg></div><img src="assets/media/reading.webp" srcset="assets/media/reading-sm.webp 800w, assets/media/reading.webp 1376w" sizes="(max-width:900px) 100vw, 50vw" alt="A reading lamp beside a stack of large-print books" loading="lazy" decoding="async"><figcaption class="slate"><span>01</span><span>Read</span></figcaption></figure>
+          <span class="num" style="display:block;margin-top:24px">01 / READ</span>
           <h3 class="h3">The Reading Room</h3>
           <p>Books and shared reading moments that invite curiosity, conversation and connection.</p>
           <a class="link card-cta" href="programs.html#reading-room" style="display:inline-block">Explore the Reading Room ↗</a>
         </article>
-        <article class="card card-feature reveal" style="--d:.1s">
-          <span class="num">02 / WELCOME</span>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div>
+        <article class="card mat-obsidian reveal" style="--d:.1s;padding-top:12px">
+          <figure class="frame r43 art-welcome "><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><img src="assets/media/welcome.webp" srcset="assets/media/welcome-sm.webp 800w, assets/media/welcome.webp 1376w" sizes="(max-width:900px) 100vw, 50vw" alt="An open welcome gift with a handwritten card" loading="lazy" decoding="async"><figcaption class="slate"><span>02</span><span>Welcome</span></figcaption></figure>
+          <span class="num" style="display:block;margin-top:24px">02 / WELCOME</span>
           <h3 class="h3">The Welcome Moment</h3>
           <p>Thoughtful welcome packs and small gestures that help new residents feel at home from day one.</p>
           <a class="link card-cta" href="programs.html#welcome-moment" style="display:inline-block">Explore the Welcome Moment ↗</a>
         </article>
-        <article class="card reveal" style="--d:.2s">
-          <span class="num">03 / CONNECT</span>
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg></div>
+        <article class="card mat-obsidian reveal" style="--d:.2s;padding-top:12px">
+          <figure class="frame r43 art-story "><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/></svg></div><img src="assets/media/story.webp" srcset="assets/media/story-sm.webp 800w, assets/media/story.webp 1376w" sizes="(max-width:900px) 100vw, 50vw" alt="Family photographs and letters beside a vintage microphone" loading="lazy" decoding="async"><figcaption class="slate"><span>03</span><span>Connect</span></figcaption></figure>
+          <span class="num" style="display:block;margin-top:24px">03 / CONNECT</span>
           <h3 class="h3">The Story Corner</h3>
           <p>Creative activities and shared stories that make room for belonging, and for a life story to be heard.</p>
           <a class="link card-cta" href="programs.html#story-corner" style="display:inline-block">Explore the Story Corner ↗</a>
@@ -132,10 +125,7 @@
 
   <section class="section">
     <div class="wrap split">
-      <div class="program-art art-film reveal" style="aspect-ratio:4/5">
-        <span class="big word" aria-hidden="true">Lifetimes</span>
-        <span class="cap">Changing Hearts Stories</span>
-      </div>
+      <figure class="frame r45 art-film  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/></svg></div><img src="assets/media/film.webp" srcset="assets/media/film-sm.webp 800w, assets/media/film.webp 1376w" sizes="(max-width:900px) 100vw, 50vw" alt="A camera set up facing an empty armchair by a window" loading="lazy" decoding="async"><figcaption class="slate"><span>Lifetimes</span><span>A film series</span></figcaption></figure>
       <div class="stack">
         <span class="eyebrow reveal">Stories</span>
         <h2 class="h2 reveal">Every life is a story <em>worth keeping.</em></h2>
@@ -150,7 +140,7 @@
 
   <section class="section">
     <div class="wrap">
-      <div class="banner reveal">
+      <div class="banner mat-gold reveal">
         <img class="seal" src="assets/img/logo-360.webp" alt="" loading="lazy" width="260" height="260">
         <span class="eyebrow">Partner with us</span>
         <h2 class="h2" style="margin-top:20px;max-width:760px">Put your brand behind a <em>good moment.</em></h2>
@@ -171,9 +161,9 @@
         <p class="lead reveal">Kindness deserves care behind the scenes, too. We coordinate each program, track what was delivered and keep partners informed, without turning people into statistics.</p>
       </div>
       <div class="grid g3" style="margin-top:56px">
-        <div class="card reveal"><span class="num">01</span><h3 class="h3" style="margin-top:18px">Listen first</h3><p>We work with community teams to understand what is actually useful.</p></div>
-        <div class="card reveal" style="--d:.1s"><span class="num">02</span><h3 class="h3" style="margin-top:18px">Make it happen</h3><p>We coordinate people, materials and delivery, with clear responsibilities.</p></div>
-        <div class="card reveal" style="--d:.2s"><span class="num">03</span><h3 class="h3" style="margin-top:18px">Close the loop</h3><p>Partners receive a concise delivery recap, plus the next opportunity to help.</p></div>
+        <div class="card mat-paper reveal"><span class="num">01</span><h3 class="h3" style="margin-top:18px">Listen first</h3><p>We work with community teams to understand what is actually useful.</p></div>
+        <div class="card mat-paper reveal" style="--d:.1s"><span class="num">02</span><h3 class="h3" style="margin-top:18px">Make it happen</h3><p>We coordinate people, materials and delivery, with clear responsibilities.</p></div>
+        <div class="card mat-paper reveal" style="--d:.2s"><span class="num">03</span><h3 class="h3" style="margin-top:18px">Close the loop</h3><p>Partners receive a concise delivery recap, plus the next opportunity to help.</p></div>
       </div>
       <div class="center" style="margin-top:40px"><a class="link" href="approach.html">How we work ↗</a></div>
     </div>

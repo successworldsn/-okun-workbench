@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/council.css">
 <script src="assets/config.js" defer></script>
 <script src="assets/site.js" defer></script>
 <!--/@head-->
@@ -49,10 +50,9 @@
 <!--/@header-->
 
 <main id="main">
-  <section class="page-hero">
-    <img class="watermark" src="assets/img/logo-720.webp" alt="" width="520" height="520">
-    <div class="embers" aria-hidden="true"></div>
+  <section class="page-hero with-frame">
     <div class="wrap">
+      <div>
       <nav class="crumbs reveal" aria-label="Breadcrumb"><a href="index.html">Home</a><span>/</span><span>Partner With Us</span></nav>
       <h1 class="h1 reveal">Your support. <em>Their moment.</em></h1>
       <p class="lead reveal">Put your brand behind a good moment. We run every program end-to-end, show you exactly what was delivered, and make sure your community knows who made it possible.</p>
@@ -60,14 +60,16 @@
         <a class="btn btn-gold" href="#tiers">See partnership levels <span class="arr">↗</span></a>
         <a class="btn" href="#inquire">Talk to us <span class="arr">↗</span></a>
       </div>
+      </div>
+      <figure class="frame  art-welcome  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><img src="assets/media/welcome.webp" srcset="assets/media/welcome-sm.webp 800w, assets/media/welcome.webp 1376w" sizes="(max-width:900px) 100vw, 40vw" alt="An open welcome gift with a handwritten card" loading="lazy" decoding="async"><figcaption class="slate"><span>Partner With Us</span><span>Your support. Their moment.</span></figcaption></figure>
     </div>
   </section>
 
   <section class="section" style="padding-top:0">
     <div class="wrap grid g3">
-      <div class="card reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><h3 class="h3">A clear, human program</h3><p>Support a specific reading, welcome or story moment, not a vague cause.</p></div>
-      <div class="card reveal" style="--d:.1s"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/></svg></div><h3 class="h3">One-time or ongoing</h3><p>Sponsor a single moment, a season, or become a founding partner for the year.</p></div>
-      <div class="card reveal" style="--d:.2s"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div><h3 class="h3">A straightforward recap</h3><p>See what was delivered, where, and the next opportunity to help, with photos where consent allows.</p></div>
+      <div class="card mat-paper reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><h3 class="h3">A clear, human program</h3><p>Support a specific reading, welcome or story moment, not a vague cause.</p></div>
+      <div class="card mat-paper reveal" style="--d:.1s"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="9"/></svg></div><h3 class="h3">One-time or ongoing</h3><p>Sponsor a single moment, a season, or become a founding partner for the year.</p></div>
+      <div class="card mat-paper reveal" style="--d:.2s"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></div><h3 class="h3">A straightforward recap</h3><p>See what was delivered, where, and the next opportunity to help, with photos where consent allows.</p></div>
     </div>
   </section>
 
@@ -78,7 +80,7 @@
         <h2 class="h2 reveal">Choose your <em>moment.</em></h2>
       </div>
       <div class="grid g3" style="margin-top:56px;align-items:stretch">
-        <article class="card tier reveal">
+        <article class="card tier mat-glass reveal">
           <span class="tag" style="align-self:flex-start">Moment</span>
           <h3 class="h3" style="margin-top:20px">Sponsor a Moment</h3>
           <div class="price">$500</div><span class="per">one program, one community</span>
@@ -88,10 +90,10 @@
             <li>A delivery recap you can share</li>
             <li>A thank-you on our social channels</li>
           </ul>
-          <a class="btn" href="#inquire" data-set="p-level=moment" data-scroll="#inquire">Choose Moment</a>
-          <a class="btn btn-gold" data-pay="sponsorMoment" hidden>Pay now ↗</a>
+          <a class="btn" href="#inquire" data-set="p-level=moment" data-scroll="#inquire">Sponsor a moment</a>
+          <a class="btn btn-gold" data-pay="sponsorMoment" hidden>Reserve now ↗</a>
         </article>
-        <article class="card tier featured reveal" style="--d:.1s">
+        <article class="card tier featured mat-obsidian mat-gold reveal" style="--d:.1s">
           <span class="tag badge">Popular</span>
           <span class="tag" style="align-self:flex-start">Season</span>
           <h3 class="h3" style="margin-top:20px">Season Partner</h3>
@@ -103,10 +105,10 @@
             <li>Quarterly impact recap with photos (with consent)</li>
             <li>An employee volunteer session</li>
           </ul>
-          <a class="btn btn-gold" href="#inquire" data-set="p-level=season" data-scroll="#inquire">Choose Season</a>
-          <a class="btn btn-ruby" data-pay="sponsorSeason" hidden>Pay now ↗</a>
+          <a class="btn btn-gold" href="#inquire" data-set="p-level=season" data-scroll="#inquire">Become a Season Partner</a>
+          <a class="btn btn-ruby" data-pay="sponsorSeason" hidden>Reserve now ↗</a>
         </article>
-        <article class="card tier reveal" style="--d:.2s">
+        <article class="card tier mat-marble reveal" style="--d:.2s">
           <span class="tag" style="align-self:flex-start">Founding</span>
           <h3 class="h3" style="margin-top:20px">Founding Heart</h3>
           <div class="price">from $10,000</div><span class="per">per year</span>
@@ -116,8 +118,8 @@
             <li>Top billing at our annual Lifetimes film night</li>
             <li>Year-round recaps and a partner briefing</li>
           </ul>
-          <a class="btn" href="#inquire" data-set="p-level=founding" data-scroll="#inquire">Choose Founding</a>
-          <a class="btn btn-gold" data-pay="sponsorFounding" hidden>Pay now ↗</a>
+          <a class="btn" href="#inquire" data-set="p-level=founding" data-scroll="#inquire">Become a Founding Heart</a>
+          <a class="btn btn-gold" data-pay="sponsorFounding" hidden>Reserve now ↗</a>
         </article>
       </div>
       <p class="small center price-note reveal">Want something custom, like an employee volunteer day or a multi-community program? <a class="link" href="#inquire">Ask us.</a></p>
@@ -131,7 +133,7 @@
         <h2 class="h2 reveal">Built for businesses that <em>care about their community.</em></h2>
         <p class="lead reveal">Local banks and credit unions, healthcare and pharmacy, elder-law and estate firms, insurance agents, realtors, home-service companies, and any business that wants to show up for its neighbors.</p>
       </div>
-      <div class="card card-feature reveal">
+      <div class="card mat-paper reveal">
         <h3 class="h3">What every partner gets</h3>
         <ul>
           <li>A program you can explain in one sentence</li>
@@ -150,7 +152,7 @@
         <h2 class="h2 reveal">Help make a good moment <em>happen.</em></h2>
         <p class="lead reveal">Tell us a little about your business. We'll reply with a simple proposal and a community that fits.</p>
       </div>
-      <div class="form-card reveal">
+      <div class="form-card mat-glass reveal">
         <form class="form" data-form="partner" data-subject="Partnership inquiry" data-success="Thank you. We'll reply with a simple proposal shortly." novalidate>
           <div class="field"><label for="p-level">Partnership level</label>
             <select class="input" id="p-level" name="level">

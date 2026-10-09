@@ -17,3 +17,6 @@ npm-debug.log*
 # misc
 .DS_Store
 *.pem
+
+# media sources (large PNGs; the built webp/mp4 files in assets/media are what ships)
+media-src/

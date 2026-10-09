@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/council.css">
 <script src="assets/config.js" defer></script>
 <script src="assets/site.js" defer></script>
 <!--/@head-->
@@ -49,10 +50,9 @@
 <!--/@header-->
 
 <main id="main">
-  <section class="page-hero">
-    <img class="watermark" src="assets/img/logo-720.webp" alt="" width="520" height="520">
-    <div class="embers" aria-hidden="true"></div>
+  <section class="page-hero with-frame">
     <div class="wrap">
+      <div>
       <nav class="crumbs reveal" aria-label="Breadcrumb"><a href="index.html">Home</a><span>/</span><span>Stories</span></nav>
       <h1 class="h1 reveal">Every life is a story <em>worth keeping.</em></h1>
       <p class="lead reveal">Changing Hearts Stories is our magazine and film series: cinematic portraits of the people, caregivers and moments inside care communities. Told with dignity, shared only with permission.</p>
@@ -60,14 +60,12 @@
         <a class="btn btn-gold" href="#nominate">Nominate a story <span class="arr">↗</span></a>
         <a class="btn" href="#subscribe">Get the Weekly Heart <span class="arr">↗</span></a>
       </div>
+      </div>
+      <figure class="frame  art-story  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/></svg></div><img src="assets/media/story.webp" srcset="assets/media/story-sm.webp 800w, assets/media/story.webp 1376w" sizes="(max-width:900px) 100vw, 40vw" alt="Family photographs and letters beside a vintage microphone" loading="lazy" decoding="async"><figcaption class="slate"><span>Changing Hearts Stories</span><span>Magazine + film</span></figcaption></figure>
     </div>
   </section>
 
-  <div class="marquee" aria-hidden="true">
-    <div class="marquee-track">
-      <span>Lifetimes</span><span>✦</span><span>Letters to My Younger Self</span><span>✦</span><span>The Caregivers</span><span>✦</span><span>Welcome Home</span><span>✦</span><span>Generations</span><span>✦</span>
-    </div>
-  </div>
+  <div class="credo" aria-label="What we believe"><div class="wrap"><span>Lifetimes</span><span>Letters to My Younger Self</span><span>The Caregivers</span><span>Welcome Home</span><span>Generations</span></div></div>
 
   <section class="section">
     <div class="wrap">
@@ -79,41 +77,19 @@
         <p class="lead reveal">Each series is a short film, a magazine feature and a set of moments to share. The first stories are being recorded in our Story Corners now.</p>
       </div>
 
-      <div class="grid g2" style="margin-top:56px">
-        <article class="card card-feature reveal" style="min-height:340px;display:flex;flex-direction:column;justify-content:flex-end">
-          <span class="tag" style="align-self:flex-start">Film series</span>
-          <h3 class="h2" style="margin-top:auto;padding-top:80px">Lifetimes</h3>
-          <p style="margin-top:12px">Three-to-five-minute cinematic portraits of a whole life: the work, the love, the turning points.</p>
-        </article>
-        <article class="card reveal" style="--d:.1s;min-height:340px;display:flex;flex-direction:column;justify-content:flex-end">
-          <span class="tag" style="align-self:flex-start">Short film</span>
-          <h3 class="h2" style="margin-top:auto;padding-top:80px">Letters to My Younger Self</h3>
-          <p style="margin-top:12px">Elders read the advice they wish they'd been given. One minute each, and hard to forget.</p>
-        </article>
-        <article class="card reveal" style="min-height:280px;display:flex;flex-direction:column;justify-content:flex-end">
-          <span class="tag" style="align-self:flex-start">Feature</span>
-          <h3 class="h3" style="margin-top:auto;padding-top:60px;font-size:clamp(26px,3vw,36px)">The Caregivers</h3>
-          <p style="margin-top:12px">Honoring the nurses, aides and staff whose care rarely gets a spotlight.</p>
-        </article>
-        <div class="grid g2" style="gap:inherit">
-          <article class="card reveal" style="--d:.1s;display:flex;flex-direction:column;justify-content:flex-end">
-            <span class="tag" style="align-self:flex-start">Feature</span>
-            <h3 class="h3" style="margin-top:auto;padding-top:50px">Welcome Home</h3>
-            <p style="margin-top:10px">A new resident's first week, told with dignity.</p>
-          </article>
-          <article class="card reveal" style="--d:.2s;display:flex;flex-direction:column;justify-content:flex-end">
-            <span class="tag" style="align-self:flex-start">Film</span>
-            <h3 class="h3" style="margin-top:auto;padding-top:50px">Generations</h3>
-            <p style="margin-top:10px">Students and elders, paired for an afternoon.</p>
-          </article>
-        </div>
+      <div class="strip" style="margin-top:56px">
+        <figure class="frame wide art-film  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/></svg></div><img src="assets/media/film.webp" srcset="assets/media/film-sm.webp 800w, assets/media/film.webp 1376w" sizes="(max-width:900px) 100vw, 66vw" alt="A camera set up facing an empty armchair" loading="lazy" decoding="async"><div class="copy"><span class="tag">Film series</span><h3 class="h2" style="margin-top:14px">Lifetimes</h3><p>Three-to-five-minute cinematic portraits of a whole life: the work, the love, the turning points.</p><span class="play" style="margin-top:16px">First films recording now</span></div></figure>
+        <figure class="frame  art-read  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/><path d="M12 6v13.5"/></svg></div><img src="assets/media/reading.webp" srcset="assets/media/reading-sm.webp 800w, assets/media/reading.webp 1376w" sizes="(max-width:900px) 100vw, 66vw" alt="A reading lamp and books in a quiet lounge" loading="lazy" decoding="async"><div class="copy"><span class="tag">Short film</span><h3 class="h3" style="margin-top:14px">Letters to My Younger Self</h3><p>Elders read the advice they wish they’d been given. One minute each.</p><span class="play" style="margin-top:16px">First films recording now</span></div></figure>
+        <figure class="frame  art-legacy  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><img src="assets/media/care.webp" srcset="assets/media/care-sm.webp 800w, assets/media/care.webp 1376w" sizes="(max-width:900px) 100vw, 66vw" alt="A caregiver’s hand resting on an older hand" loading="lazy" decoding="async"><div class="copy"><span class="tag">Feature</span><h3 class="h3" style="margin-top:14px">The Caregivers</h3><p>Honoring the nurses, aides and staff whose care rarely gets a spotlight.</p><span class="play" style="margin-top:16px">First films recording now</span></div></figure>
+        <figure class="frame  art-welcome  reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.2C1.5 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.2 0 5.3 3.1 4.1 6.3C19.5 15.4 12 20 12 20z"/></svg></div><img src="assets/media/welcome.webp" srcset="assets/media/welcome-sm.webp 800w, assets/media/welcome.webp 1376w" sizes="(max-width:900px) 100vw, 66vw" alt="An open welcome gift with a handwritten card" loading="lazy" decoding="async"><div class="copy"><span class="tag">Feature</span><h3 class="h3" style="margin-top:14px">Welcome Home</h3><p>A new resident’s first week, told with dignity.</p><span class="play" style="margin-top:16px">First films recording now</span></div></figure>
+        <figure class="frame art-legacy reveal"><div class="emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/><path d="M12 6v13.5"/></svg></div><img src="assets/media/hero.webp" srcset="assets/media/hero-sm.webp 800w, assets/media/hero.webp 1376w" sizes="(max-width:900px) 100vw, 66vw" alt="Older and younger hands holding a book together" loading="lazy" decoding="async"><div class="copy"><span class="tag">Film</span><h3 class="h3" style="margin-top:14px">Generations</h3><p>Students and elders, paired for an afternoon, and what each one learns.</p><span class="play" style="margin-top:16px">First films recording now</span></div></figure>
       </div>
     </div>
   </section>
 
   <section class="section" style="padding-top:0">
     <div class="wrap">
-      <div class="banner reveal">
+      <div class="banner mat-obsidian reveal">
         <p class="quote">"Everyone has a story. Most people are just waiting for someone to ask."</p>
         <p class="small" style="margin-top:20px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold)">The idea behind the Story Corner</p>
       </div>
@@ -128,7 +104,7 @@
         <p class="lead reveal">A grandparent, a resident, a caregiver who goes beyond. Tell us a little about them. We'll reach out and only proceed with their (or their family's) full consent.</p>
         <p class="small reveal">Please don't include medical details. We'll ask for what we need, privately.</p>
       </div>
-      <div class="form-card reveal">
+      <div class="form-card mat-glass reveal">
         <form class="form" data-form="nomination" data-subject="Story nomination" data-success="Thank you. We've received your nomination and will be in touch with care." novalidate>
           <div class="row">
             <div class="field"><label for="n-name">Your name</label><input class="input" id="n-name" name="name" autocomplete="name" required></div>

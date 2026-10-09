@@ -1,0 +1,110 @@
+/* ================= DESIGN COUNCIL PASS (Faithful + EJ Success) =================
+   Applies the SuccessFlix Design Council doctrine (see DESIGN.md) to Changing Hearts:
+   · EJ, the Geometer: one geometry, an 8px unit, three radii, one gutter.
+   · EJ, the Stone Master: every surface is made of something; materials are a language (mat-*).
+   · EJ, the Light Architect: light has a source, a warm lamp at the upper left, like the photographs.
+   · EJ, the Master of Permanence: no particle soup, no spinning rings, no animation everywhere.
+     The one thing that moves on its own is the film in a hero.
+   · Faithful: photography first; a frame, a caption, one way in. */
+
+:root{
+  --u:8px;
+  --r1:12px;--r2:20px;--r3:28px;
+  --lamp:radial-gradient(70vmax 50vmax at 12% -8%,rgba(255,196,130,.14),rgba(192,33,63,.07) 38%,transparent 70%);
+}
+
+/* the light source replaces the drifting ambient wash */
+.ambient{inset:0;animation:none;background:var(--lamp),radial-gradient(60vmax 40vmax at 100% 110%,rgba(125,16,41,.22),transparent 70%)}
+.gold-text{animation:none;background-position:30% 0}
+.card,.form-card,.banner{border-radius:var(--r2)}
+.program-art,.frame{border-radius:var(--r3)}
+.input{border-radius:var(--r1)}
+
+/* ---------- materials ---------- */
+/* each: a rim (1px edge catching the lamp), a sheen (light across the surface), a grain you feel more than see */
+.mat-obsidian{background:
+  linear-gradient(155deg,rgba(255,255,255,.07),rgba(255,255,255,0) 32%),
+  radial-gradient(120% 80% at 0% 0%,rgba(192,33,63,.16),transparent 60%),
+  linear-gradient(180deg,#160a10,#0a0508);
+  border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 30px 70px -40px #000}
+.mat-marble{background:
+  linear-gradient(160deg,rgba(255,247,238,.10),rgba(255,247,238,.02) 45%),
+  repeating-linear-gradient(118deg,rgba(255,255,255,.018) 0 2px,transparent 2px 9px),
+  linear-gradient(180deg,#221419,#160c11);
+  border:1px solid rgba(255,247,238,.14);box-shadow:inset 0 1px 0 rgba(255,247,238,.16)}
+.mat-paper{background:
+  linear-gradient(170deg,rgba(246,226,176,.09),rgba(246,226,176,.02) 50%),
+  linear-gradient(180deg,#1f1013,#170b0f);
+  border:1px solid rgba(246,226,176,.16);box-shadow:inset 0 1px 0 rgba(246,226,176,.12)}
+.mat-glass{background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+/* gold is jewelry: a rim, a clasp, never a gold sheet */
+.mat-gold{border:1px solid rgba(226,194,127,.55);box-shadow:inset 0 1px 0 rgba(246,226,176,.35),0 0 0 1px rgba(0,0,0,.4),0 24px 60px -36px rgba(226,194,127,.45)}
+
+/* primary action: ruby velvet with a gold clasp (no gold sheets, no cash register) */
+.btn-gold{color:var(--cream);background:linear-gradient(160deg,#d0284a,#8e1330);border:1px solid rgba(246,226,176,.55);box-shadow:inset 0 1px 0 rgba(255,220,200,.35),0 14px 36px -16px rgba(192,33,63,.9)}
+.btn-gold:hover{background:linear-gradient(160deg,#e03357,#a1173a);border-color:var(--gold-2);box-shadow:inset 0 1px 0 rgba(255,220,200,.45),0 18px 44px -16px rgba(192,33,63,1)}
+.nav .btn{color:var(--cream)}
+
+/* ---------- photography ---------- */
+.frame{position:relative;overflow:hidden;margin:0;isolation:isolate;background:var(--art,linear-gradient(140deg,#2a0d18,#0f0508))}
+.frame img,.frame video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.frame:after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 55%,rgba(10,5,8,.75)),radial-gradient(90% 70% at 15% 0%,rgba(255,196,130,.10),transparent 60%)}
+.frame .slate{position:absolute;left:calc(var(--u)*3);right:calc(var(--u)*3);bottom:calc(var(--u)*2.5);z-index:2;display:flex;justify-content:space-between;gap:var(--u);font:600 10px/1.4 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--gold-2)}
+.frame .slate span:last-child{color:rgba(255,247,238,.6)}
+.frame.r43{aspect-ratio:4/3}.frame.r45{aspect-ratio:4/5}.frame.r169{aspect-ratio:16/9}.frame.r21{aspect-ratio:21/9}
+.frame img{transition:transform 1.2s var(--ease)}
+.frame:hover img{transform:scale(1.03)}
+/* when a photo hasn't arrived yet, the frame keeps its art and a quiet emblem */
+.frame .emblem{position:absolute;inset:0;display:grid;place-items:center;z-index:-1}
+.frame .emblem svg{width:22%;color:var(--gold-2);opacity:.55}
+
+/* ---------- the film hero ---------- */
+.hero.film{padding:0;min-height:100svh;align-items:flex-end;text-align:left}
+.hero.film .film-bg{position:absolute;inset:0;z-index:-2;background:linear-gradient(140deg,#2a0d18,#0b0508)}
+.hero.film .film-bg img,.hero.film .film-bg video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero.film .film-bg img{animation:push 26s ease-out both}
+@keyframes push{from{transform:scale(1.08)}to{transform:scale(1)}}
+.hero.film:after{content:'';position:absolute;inset:0;z-index:-1;background:
+  linear-gradient(90deg,rgba(10,5,8,.92) 0%,rgba(10,5,8,.72) 38%,rgba(10,5,8,.15) 75%),
+  linear-gradient(0deg,rgba(13,6,9,1) 0%,rgba(13,6,9,0) 38%)}
+.hero.film .wrap{padding:calc(var(--u)*18) 0 calc(var(--u)*12)}
+.hero.film .lead{max-width:540px}
+.hero.film .seal{width:88px;height:88px;margin-bottom:calc(var(--u)*3);filter:drop-shadow(0 10px 30px rgba(192,33,63,.5))}
+@media (max-width:900px){
+  .hero.film:after{background:linear-gradient(0deg,rgba(13,6,9,1) 6%,rgba(13,6,9,.6) 50%,rgba(13,6,9,.05) 100%)}
+  .hero.film .wrap{padding-top:calc(var(--u)*30)}
+  .hero.film .seal{width:64px;height:64px}
+}
+.credit-line{margin-top:calc(var(--u)*5);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,247,238,.55)}
+
+/* credo strip: words that stay still */
+.credo{border-block:1px solid var(--line);padding:calc(var(--u)*4) 0}
+.credo .wrap{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(var(--u)*2) calc(var(--u)*5)}
+.credo span{font:italic 500 clamp(20px,2.4vw,28px)/1 var(--serif)}
+.credo span:nth-child(even){color:var(--gold)}
+
+/* page heroes: photograph on the right, lit from the lamp */
+.page-hero.with-frame .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:calc(var(--u)*8);align-items:end}
+.page-hero.with-frame .frame{aspect-ratio:4/5;max-height:560px}
+@media (max-width:900px){.page-hero.with-frame .wrap{grid-template-columns:1fr}.page-hero.with-frame .frame{aspect-ratio:16/10}}
+
+/* film strip on Stories */
+.strip{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:calc(var(--u)*2)}
+.strip .frame{grid-column:span 4;aspect-ratio:3/4}
+.strip .frame.wide{grid-column:span 8;aspect-ratio:auto}
+@media (max-width:900px){.strip .frame,.strip .frame.wide{grid-column:span 12;aspect-ratio:16/10}}
+.strip .frame:after{background:linear-gradient(180deg,rgba(10,5,8,.05) 25%,rgba(10,5,8,.88) 78%),radial-gradient(90% 70% at 15% 0%,rgba(255,196,130,.10),transparent 60%)}
+.strip .frame .tag{background:rgba(10,5,8,.55)}
+.strip .frame .copy{position:absolute;left:calc(var(--u)*3);right:calc(var(--u)*3);bottom:calc(var(--u)*6);z-index:2}
+.strip .frame .copy p{color:rgba(255,247,238,.78);margin-top:var(--u);font-size:15px;max-width:440px}
+
+/* play affordance for films that are coming */
+.play{display:inline-flex;align-items:center;gap:calc(var(--u)*1.5);font:600 11px var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--gold-2)}
+.play:before{content:'';width:40px;height:40px;border-radius:50%;border:1px solid rgba(246,226,176,.6);background:radial-gradient(circle,rgba(192,33,63,.6),rgba(125,16,41,.3));
+  -webkit-mask:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.play{position:relative}
+.play:after{content:'';position:absolute;left:16px;top:50%;transform:translateY(-50%);border-left:10px solid var(--cream);border-top:6px solid transparent;border-bottom:6px solid transparent}
+
+/* frame backgrounds reuse the program art until a photograph arrives */
+.frame.art-read,.frame.art-welcome,.frame.art-story,.frame.art-legacy,.frame.art-film{background:var(--art)}

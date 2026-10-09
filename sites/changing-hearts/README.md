@@ -3,7 +3,8 @@
 A static, multi-page site built from the v3 prototype (`changing_hearts_experience_v3.html`).
 It has no framework and no build step to deploy: upload this folder to any static host.
 
-Designed by EJ Success & Faithful · SuccessFlix Design Council.
+Designed by EJ Success & Faithful · SuccessFlix Design Council. Their doctrine, the materials used here and
+the scorecard for this pass are in [`DESIGN.md`](DESIGN.md).
 
 ## Pages
 | File | Page |
@@ -30,6 +31,23 @@ Designed by EJ Success & Faithful · SuccessFlix Design Council.
 4. **Social links.** Links show only once a URL is filled in.
 5. **Prices.** Package and sponsorship prices are written in `legacy.html` and `partners.html`.
    They are suggested starting prices, so confirm them before launch.
+
+## Media (photographs and the home film)
+Pages expect these files in `assets/media/`: `hero`, `reading`, `welcome`, `story`, `film`, `care`
+(each as `NAME.webp` and `NAME-sm.webp`) plus `hero-loop.mp4` / `hero-loop.webm`. **Until they exist, every
+frame shows its warm color art and an emblem instead, so nothing looks broken.**
+
+Build them with one command (needs `ffmpeg` and internet access to figma.com):
+
+```bash
+bash tools/make-media.sh          # downloads the six council stills, builds webp + the 12s film loop
+bash tools/make-media.sh --local  # builds from your own photos in media-src/ (hero.png, reading.png, ...)
+```
+
+The six stills were generated with AI (Figma) for this redesign. They show no faces and no real residents.
+Their download links expire **2026-10-16**. Swap in real, consented photographs from your sessions whenever
+you have them (same file names in `media-src/`, then `--local`). Real photos will do more for trust than
+anything else on the site.
 
 ## Editing shared parts
 The head, header and footer live in `partials/`. After changing one, run `node build.mjs` to copy it
